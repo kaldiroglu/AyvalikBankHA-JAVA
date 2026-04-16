@@ -36,10 +36,17 @@ The heart of the application. **No Spring, no JPA, no BCrypt** — plain Java on
 
 These are *rich* objects. `Account` owns its own invariants:
 ```java
-account.deposit(money)      // validates currency, updates balance, returns Transaction
-account.withdraw(money)     // validates sufficient funds
-account.transferOut(...)    // deducts amount + fee
+account.deposit(money)      // validates currency + ACTIVE status, updates balance, returns Transaction
+account.withdraw(money)     // validates sufficient funds + ACTIVE status
+account.transferOut(...)    // deducts amount + fee, requires ACTIVE status
+account.freeze()            // ACTIVE → FROZEN
+account.unfreeze()          // FROZEN → ACTIVE
+account.close()             // ACTIVE|FROZEN → CLOSED (terminal)
 ```
+
+**Enums** (`domain/model/`): `AccountStatus` (`ACTIVE`, `FROZEN`, `CLOSED`), `Currency`, `TransactionType`
+
+`AccountStatus` drives a state machine inside `Account`. All mutating operations require `ACTIVE`; invalid transitions throw `IllegalStateException`.
 
 **Value Objects as Records** (`domain/model/`): `Money`, `Password`, `CustomerId`, `AccountId`, `TransactionId`
 
@@ -49,7 +56,7 @@ Immutable and self-validating. `Money.subtract()` throws if balance is insuffici
 - `PasswordValidationService` — enforces 8-16 char, upper/lower/digit/special rules
 - `TransferDomainService` — computes fees (0% same customer, configurable % cross-customer)
 
-**Ports In** (`domain/port/in/`): Use-case interfaces such as `CreateCustomerUseCase`, `DepositMoneyUseCase`. Each carries a nested `Command` record for its input.
+**Ports In** (`domain/port/in/`): Use-case interfaces such as `CreateCustomerUseCase`, `DepositMoneyUseCase`, `FreezeAccountUseCase`, `UnfreezeAccountUseCase`, `CloseAccountUseCase`. Each carries a nested `Command` record for its input (or takes a typed ID directly for simple operations).
 
 **Ports Out** (`domain/port/out/`): Repository interfaces (`CustomerRepositoryPort`, `AccountRepositoryPort`, etc.) and infrastructure interfaces (`PasswordHasherPort`, `SettingsRepositoryPort`). The domain *declares* what it needs; the adapters *provide* it.
 
@@ -77,7 +84,7 @@ Controller → ChangePasswordUseCase.Command
 
 ### 3. Adapters — Inbound (`adapter/in/web/`)
 REST controllers that translate HTTP ↔ use-case commands:
-- `AdminController` → `/api/admin/**` — create/delete/list customers, set transfer fee
+- `AdminController` → `/api/admin/**` — create/delete/list customers, set transfer fee, freeze/unfreeze/close accounts
 - `CustomerController` → `/api/customers/**` — change password
 - `AccountController` → `/api/accounts/**` — open account, deposit, withdraw, transfer, balance, history
 - `GlobalExceptionHandler` — maps domain/application exceptions to RFC 7807 `ProblemDetail` responses
@@ -107,3 +114,4 @@ REST controllers that translate HTTP ↔ use-case commands:
 | Password reuse check in application service | BCrypt comparison requires the hasher port, which cannot be in the domain |
 | JPA entities separate from domain entities | Domain model can evolve without breaking the DB schema and vice versa |
 | Nested `Command` records in use-case interfaces | Self-documenting, no separate command classes needed |
+| `AccountStatus` state machine in `Account` entity | Status transitions and operation guards live in the domain where the rules belong; the application service only translates `IllegalStateException` → `AccountNotOperableException` |

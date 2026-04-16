@@ -1,6 +1,7 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoundException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
@@ -23,7 +24,10 @@ public class AccountApplicationService implements
         GetBalanceUseCase,
         GetTransactionsUseCase,
         TransferMoneyUseCase,
-        ListAccountsUseCase {
+        ListAccountsUseCase,
+        FreezeAccountUseCase,
+        UnfreezeAccountUseCase,
+        CloseAccountUseCase {
 
     private final AccountRepositoryPort accountRepository;
     private final CustomerRepositoryPort customerRepository;
@@ -104,6 +108,39 @@ public class AccountApplicationService implements
         if (!customerRepository.existsById(ownerId))
             throw new CustomerNotFoundException("Customer not found: " + ownerId);
         return accountRepository.findByOwnerId(ownerId);
+    }
+
+    @Override
+    public void freezeAccount(AccountId accountId) {
+        Account account = findAccountOrThrow(accountId);
+        try {
+            account.freeze();
+        } catch (IllegalStateException e) {
+            throw new AccountNotOperableException(e.getMessage());
+        }
+        accountRepository.save(account);
+    }
+
+    @Override
+    public void unfreezeAccount(AccountId accountId) {
+        Account account = findAccountOrThrow(accountId);
+        try {
+            account.unfreeze();
+        } catch (IllegalStateException e) {
+            throw new AccountNotOperableException(e.getMessage());
+        }
+        accountRepository.save(account);
+    }
+
+    @Override
+    public void closeAccount(AccountId accountId) {
+        Account account = findAccountOrThrow(accountId);
+        try {
+            account.close();
+        } catch (IllegalStateException e) {
+            throw new AccountNotOperableException(e.getMessage());
+        }
+        accountRepository.save(account);
     }
 
     private Account findAccountOrThrow(AccountId accountId) {

@@ -1,8 +1,10 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoundException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.AccountStatus;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.CreateAccountUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.DepositMoneyUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.TransferMoneyUseCase;
@@ -132,6 +134,66 @@ class AccountApplicationServiceTest {
         // 200 transferred + 2 fee (1%) = 202 deducted from source
         assertThat(source.getBalance().amount()).isEqualByComparingTo("798.00");
         assertThat(target.getBalance().amount()).isEqualByComparingTo("200.00");
+    }
+
+    // ── freeze / unfreeze / close ─────────────────────────────────────────
+
+    @Test
+    void shouldFreezeAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        Account account = Account.open(ownerId, Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.freezeAccount(account.getId());
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.FROZEN);
+        verify(accountRepository).save(account);
+    }
+
+    @Test
+    void shouldUnfreezeAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        Account account = Account.open(ownerId, Currency.USD);
+        account.freeze();
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.unfreezeAccount(account.getId());
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    void shouldCloseAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        Account account = Account.open(ownerId, Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.closeAccount(account.getId());
+
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.CLOSED);
+    }
+
+    @Test
+    void shouldThrowAccountNotOperableWhenFreezingClosedAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        Account account = Account.open(ownerId, Currency.USD);
+        account.close();
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.freezeAccount(account.getId()))
+                .isInstanceOf(AccountNotOperableException.class);
+    }
+
+    @Test
+    void shouldThrowAccountNotFoundWhenFreezingMissingAccount() {
+        AccountId id = AccountId.generate();
+        when(accountRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.freezeAccount(id))
+                .isInstanceOf(AccountNotFoundException.class);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -33,6 +34,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PasswordReusedException.class)
     public ProblemDetail handlePasswordReused(PasswordReusedException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(AccountNotOperableException.class)
+    public ProblemDetail handleAccountNotOperable(AccountNotOperableException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 
     @ExceptionHandler(UnauthorizedAccessException.class)

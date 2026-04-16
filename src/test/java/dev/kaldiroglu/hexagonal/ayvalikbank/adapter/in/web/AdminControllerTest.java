@@ -1,16 +1,14 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Customer;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Password;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.CreateCustomerUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.DeleteCustomerUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.ListCustomersUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.SetTransferFeeUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -42,6 +40,9 @@ class AdminControllerTest {
     @MockitoBean DeleteCustomerUseCase deleteCustomer;
     @MockitoBean ListCustomersUseCase listCustomers;
     @MockitoBean SetTransferFeeUseCase setTransferFee;
+    @MockitoBean FreezeAccountUseCase freezeAccount;
+    @MockitoBean UnfreezeAccountUseCase unfreezeAccount;
+    @MockitoBean CloseAccountUseCase closeAccount;
 
     // ── helpers ───────────────────────────────────────────────────────────
 
@@ -203,5 +204,78 @@ class AdminControllerTest {
                                 {"feePercent":101.0}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ── PUT /api/admin/accounts/{id}/freeze ───────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void freezeAccount_returnsOk() throws Exception {
+        String id = UUID.randomUUID().toString();
+        doNothing().when(freezeAccount).freezeAccount(any());
+
+        mockMvc.perform(put("/api/admin/accounts/{id}/freeze", id))
+                .andExpect(status().isOk());
+
+        verify(freezeAccount).freezeAccount(any());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void freezeAccount_returnsUnprocessableEntityForInvalidTransition() throws Exception {
+        doThrow(new AccountNotOperableException("Account is already frozen"))
+                .when(freezeAccount).freezeAccount(any());
+
+        mockMvc.perform(put("/api/admin/accounts/{id}/freeze", UUID.randomUUID()))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    // ── PUT /api/admin/accounts/{id}/unfreeze ─────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void unfreezeAccount_returnsOk() throws Exception {
+        doNothing().when(unfreezeAccount).unfreezeAccount(any());
+
+        mockMvc.perform(put("/api/admin/accounts/{id}/unfreeze", UUID.randomUUID()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void unfreezeAccount_returnsUnprocessableEntityForInvalidTransition() throws Exception {
+        doThrow(new AccountNotOperableException("Account is not frozen"))
+                .when(unfreezeAccount).unfreezeAccount(any());
+
+        mockMvc.perform(put("/api/admin/accounts/{id}/unfreeze", UUID.randomUUID()))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    // ── PUT /api/admin/accounts/{id}/close ────────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void closeAccount_returnsOk() throws Exception {
+        doNothing().when(closeAccount).closeAccount(any());
+
+        mockMvc.perform(put("/api/admin/accounts/{id}/close", UUID.randomUUID()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void closeAccount_returnsUnprocessableEntityForAlreadyClosed() throws Exception {
+        doThrow(new AccountNotOperableException("Account is already closed"))
+                .when(closeAccount).closeAccount(any());
+
+        mockMvc.perform(put("/api/admin/accounts/{id}/close", UUID.randomUUID()))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
+    void closeAccount_returnsForbiddenForCustomerRole() throws Exception {
+        mockMvc.perform(put("/api/admin/accounts/{id}/close", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
     }
 }

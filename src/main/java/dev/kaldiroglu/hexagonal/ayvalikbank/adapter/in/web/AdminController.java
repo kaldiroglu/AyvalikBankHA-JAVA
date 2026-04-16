@@ -3,11 +3,10 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.CreateCustomerRequest;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.SetTransferFeeRequest;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.CustomerResponse;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.AccountId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.CreateCustomerUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.DeleteCustomerUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.ListCustomersUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.SetTransferFeeUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
+
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,15 +22,24 @@ public class AdminController {
     private final DeleteCustomerUseCase deleteCustomer;
     private final ListCustomersUseCase listCustomers;
     private final SetTransferFeeUseCase setTransferFee;
+    private final FreezeAccountUseCase freezeAccount;
+    private final UnfreezeAccountUseCase unfreezeAccount;
+    private final CloseAccountUseCase closeAccount;
 
     public AdminController(CreateCustomerUseCase createCustomer,
                            DeleteCustomerUseCase deleteCustomer,
                            ListCustomersUseCase listCustomers,
-                           SetTransferFeeUseCase setTransferFee) {
+                           SetTransferFeeUseCase setTransferFee,
+                           FreezeAccountUseCase freezeAccount,
+                           UnfreezeAccountUseCase unfreezeAccount,
+                           CloseAccountUseCase closeAccount) {
         this.createCustomer = createCustomer;
         this.deleteCustomer = deleteCustomer;
         this.listCustomers = listCustomers;
         this.setTransferFee = setTransferFee;
+        this.freezeAccount = freezeAccount;
+        this.unfreezeAccount = unfreezeAccount;
+        this.closeAccount = closeAccount;
     }
 
     @PostMapping("/customers")
@@ -58,6 +66,24 @@ public class AdminController {
     @PutMapping("/settings/transfer-fee")
     public ResponseEntity<Void> setTransferFee(@Valid @RequestBody SetTransferFeeRequest request) {
         setTransferFee.setTransferFee(new SetTransferFeeUseCase.Command(request.feePercent()));
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/accounts/{accountId}/freeze")
+    public ResponseEntity<Void> freezeAccount(@PathVariable String accountId) {
+        freezeAccount.freezeAccount(AccountId.of(accountId));
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/accounts/{accountId}/unfreeze")
+    public ResponseEntity<Void> unfreezeAccount(@PathVariable String accountId) {
+        unfreezeAccount.unfreezeAccount(AccountId.of(accountId));
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/accounts/{accountId}/close")
+    public ResponseEntity<Void> closeAccount(@PathVariable String accountId) {
+        closeAccount.closeAccount(AccountId.of(accountId));
         return ResponseEntity.ok().build();
     }
 }

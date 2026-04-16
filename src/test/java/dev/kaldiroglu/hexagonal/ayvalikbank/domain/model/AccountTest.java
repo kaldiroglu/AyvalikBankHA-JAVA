@@ -6,6 +6,135 @@ import static org.assertj.core.api.Assertions.*;
 
 class AccountTest {
 
+    // ── Status: initial state ─────────────────────────────────────────────
+
+    @Test
+    void shouldOpenAccountWithActiveStatus() {
+        Account account = openUsdAccount();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    // ── Status: freeze / unfreeze ─────────────────────────────────────────
+
+    @Test
+    void shouldFreezeActiveAccount() {
+        Account account = openUsdAccount();
+        account.freeze();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.FROZEN);
+    }
+
+    @Test
+    void shouldUnfreezeAccount() {
+        Account account = openUsdAccount();
+        account.freeze();
+        account.unfreeze();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    void shouldRejectFreezingAlreadyFrozenAccount() {
+        Account account = openUsdAccount();
+        account.freeze();
+        assertThatThrownBy(account::freeze)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already frozen");
+    }
+
+    @Test
+    void shouldRejectUnfreezingActiveAccount() {
+        Account account = openUsdAccount();
+        assertThatThrownBy(account::unfreeze)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not frozen");
+    }
+
+    // ── Status: close ─────────────────────────────────────────────────────
+
+    @Test
+    void shouldCloseActiveAccount() {
+        Account account = openUsdAccount();
+        account.close();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.CLOSED);
+    }
+
+    @Test
+    void shouldCloseFrozenAccount() {
+        Account account = openUsdAccount();
+        account.freeze();
+        account.close();
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.CLOSED);
+    }
+
+    @Test
+    void shouldRejectClosingAlreadyClosedAccount() {
+        Account account = openUsdAccount();
+        account.close();
+        assertThatThrownBy(account::close)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already closed");
+    }
+
+    @Test
+    void shouldRejectFreezingClosedAccount() {
+        Account account = openUsdAccount();
+        account.close();
+        assertThatThrownBy(account::freeze)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("closed");
+    }
+
+    @Test
+    void shouldRejectUnfreezingClosedAccount() {
+        Account account = openUsdAccount();
+        account.close();
+        assertThatThrownBy(account::unfreeze)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("closed");
+    }
+
+    // ── Guard: operations blocked on non-ACTIVE accounts ─────────────────
+
+    @Test
+    void shouldRejectDepositOnFrozenAccount() {
+        Account account = openUsdAccount();
+        account.freeze();
+        assertThatThrownBy(() -> account.deposit(Money.of(100.0, Currency.USD)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("frozen");
+    }
+
+    @Test
+    void shouldRejectWithdrawOnClosedAccount() {
+        Account account = openUsdAccount();
+        account.deposit(Money.of(200.0, Currency.USD));
+        account.close();
+        assertThatThrownBy(() -> account.withdraw(Money.of(50.0, Currency.USD)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("closed");
+    }
+
+    @Test
+    void shouldRejectTransferOutOnFrozenAccount() {
+        Account account = openUsdAccount();
+        account.deposit(Money.of(500.0, Currency.USD));
+        account.freeze();
+        assertThatThrownBy(() -> account.transferOut(
+                Money.of(100.0, Currency.USD), Money.zero(Currency.USD), "target"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("frozen");
+    }
+
+    @Test
+    void shouldRejectTransferInOnClosedAccount() {
+        Account account = openUsdAccount();
+        account.close();
+        assertThatThrownBy(() -> account.transferIn(Money.of(100.0, Currency.USD), "source"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("closed");
+    }
+
+
+
     private Account openUsdAccount() {
         return Account.open(CustomerId.generate(), Currency.USD);
     }

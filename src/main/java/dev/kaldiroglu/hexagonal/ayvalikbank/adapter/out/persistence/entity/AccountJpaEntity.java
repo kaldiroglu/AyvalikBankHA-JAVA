@@ -21,6 +21,9 @@ public class AccountJpaEntity {
     @Column(name = "balance", nullable = false, precision = 19, scale = 2)
     private BigDecimal balance;
 
+    @Column(name = "status", nullable = false, length = 10)
+    private String status;
+
     public AccountJpaEntity() {}
 
     public UUID getId() { return id; }
@@ -34,4 +37,7 @@ public class AccountJpaEntity {
 
     public BigDecimal getBalance() { return balance; }
     public void setBalance(BigDecimal balance) { this.balance = balance; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }
