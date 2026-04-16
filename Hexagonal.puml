@@ -94,6 +94,9 @@ package "« T H E   H E X A G O N »" <<hexagon>> {
         component [GetTransactionsUseCase]  <<interface>> as UC_GT
         component [ListAccountsUseCase]     <<interface>> as UC_LA
         component [TransferMoneyUseCase]    <<interface>> as UC_TM
+        component [FreezeAccountUseCase]    <<interface>> as UC_FA
+        component [UnfreezeAccountUseCase]  <<interface>> as UC_UA
+        component [CloseAccountUseCase]     <<interface>> as UC_XA
     }
 
     ' ── APPLICATION LAYER ───────────────────────
@@ -123,6 +126,7 @@ package "« T H E   H E X A G O N »" <<hexagon>> {
             component [TransactionId]  <<record>> as VO_TI
             component [Currency]       <<enum>>   as VO_CY
             component [TransactionType]<<enum>>   as VO_TT
+            component [AccountStatus]  <<enum>>   as VO_AS
         }
 
         package "Domain Services" <<domain>> {
@@ -155,7 +159,7 @@ package "Outbound Adapters" <<outbound>> {
 ' ════════════════════════════════════════════════
 ' DATABASE
 ' ════════════════════════════════════════════════
-database "PostgreSQL\n──────────────────\ncustomers\npassword_history\naccounts\ntransactions\nsettings" as DB
+database "PostgreSQL\n──────────────────\ncustomers\npassword_history\naccounts  (+ status)\ntransactions\nsettings" as DB
 
 ' ════════════════════════════════════════════════
 ' CONNECTIONS — INBOUND SIDE
@@ -171,6 +175,9 @@ ADMIN --> UC_CC
 ADMIN --> UC_DC
 ADMIN --> UC_LC
 ADMIN --> UC_SF
+ADMIN --> UC_FA
+ADMIN --> UC_UA
+ADMIN --> UC_XA
 CUST  --> UC_CP
 ACC   --> UC_CA
 ACC   --> UC_DM
@@ -196,6 +203,9 @@ ASVC ..> UC_GB : implements
 ASVC ..> UC_GT : implements
 ASVC ..> UC_LA : implements
 ASVC ..> UC_TM : implements
+ASVC ..> UC_FA : implements
+ASVC ..> UC_UA : implements
+ASVC ..> UC_XA : implements
 
 ' ════════════════════════════════════════════════
 ' APPLICATION SERVICES use DOMAIN
@@ -206,6 +216,13 @@ ASVC --> ENT_A
 ASVC --> ENT_T
 ASVC --> DS_TD
 ASVC --> VO_M
+ENT_A --> VO_AS
+note right of VO_AS
+  ACTIVE → FROZEN → ACTIVE
+  ACTIVE|FROZEN → CLOSED (terminal)
+  deposit / withdraw / transferOut
+  / transferIn require ACTIVE
+end note
 
 ' ════════════════════════════════════════════════
 ' APPLICATION SERVICES call PORTS OUT

@@ -40,6 +40,17 @@ package "domain.model" {
         TRANSFER_IN
     }
 
+    enum AccountStatus {
+        ACTIVE
+        FROZEN
+        CLOSED
+        ..state machine..
+        ACTIVE → FROZEN (freeze)
+        FROZEN → ACTIVE (unfreeze)
+        ACTIVE|FROZEN → CLOSED (close)
+        CLOSED is terminal
+    }
+
     class CustomerId <<record>> {
         + UUID value
         --
@@ -106,16 +117,24 @@ package "domain.model" {
         - CustomerId ownerId
         - Currency currency
         - Money balance
+        - AccountStatus status
         --
         + {static} Account open(CustomerId, Currency)
+        .. operations (require ACTIVE) ..
         + Transaction deposit(Money)
         + Transaction withdraw(Money)
         + Transaction transferOut(Money, Money, String)
         + Transaction transferIn(Money, String)
+        .. status transitions ..
+        + void freeze()
+        + void unfreeze()
+        + void close()
+        .. accessors ..
         + AccountId getId()
         + CustomerId getOwnerId()
         + Currency getCurrency()
         + Money getBalance()
+        + AccountStatus getStatus()
     }
 
     class Transaction <<entity>> {
@@ -142,6 +161,7 @@ package "domain.model" {
     Account     "1" *-down-  "1"    Money         : balance
     Account     "1" o-right- "1"    CustomerId    : ownerId
     Account     "1" o-right- "1"    Currency
+    Account     "1" *-down-  "1"    AccountStatus : status
     Transaction "1" *-right- "1"    TransactionId : id
     Transaction "1" *-down-  "1"    Money         : amount
     Transaction "1" o-right- "1"    AccountId     : accountId
@@ -255,6 +275,18 @@ package "domain.port.in" {
         + BigDecimal feePercent
     }
     SetTransferFeeUseCase +-- SetTransferFeeCommand
+
+    interface FreezeAccountUseCase {
+        + void freezeAccount(AccountId)
+    }
+
+    interface UnfreezeAccountUseCase {
+        + void unfreezeAccount(AccountId)
+    }
+
+    interface CloseAccountUseCase {
+        + void closeAccount(AccountId)
+    }
 }
 
 ' ─────────────────────────────────────────
@@ -308,6 +340,9 @@ WithdrawMoneyUseCase   ..> Transaction  : "returns"
 GetBalanceUseCase      ..> Money        : "returns"
 GetTransactionsUseCase ..> Transaction  : "returns"
 TransferMoneyUseCase   ..> AccountId    : "uses"
+FreezeAccountUseCase   ..> AccountId    : "uses"
+UnfreezeAccountUseCase ..> AccountId    : "uses"
+CloseAccountUseCase    ..> AccountId    : "uses"
 
 CustomerRepositoryPort    ..> Customer    : "manages"
 AccountRepositoryPort     ..> Account     : "manages"
