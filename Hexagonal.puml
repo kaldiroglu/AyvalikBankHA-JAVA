@@ -1,4 +1,4 @@
-@startuml Hexagonal Architecture
+@startuml HexagonalArchitecture
 
 title Ayvalık Bank CC-1 — Hexagonal Architecture
 
@@ -10,60 +10,69 @@ skinparam shadowing false
 skinparam linetype polyline
 skinparam packageStyle rectangle
 
-' ── Colour palette ──────────────────────────────────────────────
 skinparam package {
-    BackgroundColor<<inbound>>    #D8E8FF
-    BorderColor<<inbound>>        #2255AA
-    FontColor<<inbound>>          #2255AA
-    BackgroundColor<<outbound>>   #D8F5D8
-    BorderColor<<outbound>>       #226622
-    FontColor<<outbound>>         #226622
-    BackgroundColor<<port_in>>    #EAF3FF
-    BorderColor<<port_in>>        #4488CC
-    BackgroundColor<<port_out>>   #EAFAEA
-    BorderColor<<port_out>>       #44AA44
-    BackgroundColor<<app>>        #FFF8D8
-    BorderColor<<app>>            #AA8800
-    BackgroundColor<<domain>>     #FFE8E8
-    BorderColor<<domain>>         #CC2222
-    BackgroundColor<<hexagon>>    #FFFAF0
-    BorderColor<<hexagon>>        #CC6600
-    FontColor<<hexagon>>          #CC6600
+    BackgroundColor<<inbound>>   #D8E8FF
+    BorderColor<<inbound>>       #2255AA
+    FontColor<<inbound>>         #2255AA
+    BackgroundColor<<outbound>>  #D8F5D8
+    BorderColor<<outbound>>      #226622
+    FontColor<<outbound>>        #226622
+    BackgroundColor<<port_in>>   #EAF3FF
+    BorderColor<<port_in>>       #4488CC
+    BackgroundColor<<port_out>>  #EAFAEA
+    BorderColor<<port_out>>      #44AA44
+    BackgroundColor<<app>>       #FFF8D8
+    BorderColor<<app>>           #AA8800
+    BackgroundColor<<domain>>    #FFE8E8
+    BorderColor<<domain>>        #CC2222
+    BackgroundColor<<hexagon>>   #FFFAF0
+    BorderColor<<hexagon>>       #CC6600
+    FontColor<<hexagon>>         #CC6600
 }
 skinparam component {
-    BackgroundColor<<ctrl>>       #C8DCFF
-    BorderColor<<ctrl>>           #2255AA
-    BackgroundColor<<svc>>        #FFEEBB
-    BorderColor<<svc>>            #AA8800
-    BackgroundColor<<adapter>>    #C8F5C8
-    BorderColor<<adapter>>        #226622
-    BackgroundColor<<security>>   #EEDDFF
-    BorderColor<<security>>       #664488
-}
-skinparam interface {
-    BackgroundColor #FFFFFF
-    BorderColor     #555555
+    BackgroundColor<<ctrl>>      #C8DCFF
+    BorderColor<<ctrl>>          #2255AA
+    BackgroundColor<<svc>>       #FFEEBB
+    BorderColor<<svc>>           #AA8800
+    BackgroundColor<<adapter>>   #C8F5C8
+    BorderColor<<adapter>>       #226622
+    BackgroundColor<<security>>  #EEDDFF
+    BorderColor<<security>>      #664488
+    BackgroundColor<<interface>> #FFFFFF
+    BorderColor<<interface>>     #888888
+    BackgroundColor<<entity>>    #DDEEFF
+    BorderColor<<entity>>        #3366AA
+    BackgroundColor<<record>>    #EEFFDD
+    BorderColor<<record>>        #336633
+    BackgroundColor<<service>>   #FFF5CC
+    BorderColor<<service>>       #AA8800
+    BackgroundColor<<enum>>      #F5F5F5
+    BorderColor<<enum>>          #777777
 }
 skinparam database {
     BackgroundColor #F0F0F0
     BorderColor     #555555
 }
+skinparam actor {
+    BackgroundColor #D8E8FF
+    BorderColor     #2255AA
+}
 
 ' ════════════════════════════════════════════════
 ' HTTP CLIENTS
 ' ════════════════════════════════════════════════
-actor Admin    #D8E8FF
-actor Customer #D8E8FF
+actor Admin
+actor Customer
 
 ' ════════════════════════════════════════════════
 ' INBOUND ADAPTERS
 ' ════════════════════════════════════════════════
 package "Inbound Adapters" <<inbound>> {
-    component [Security Filter\nBankUserDetailsService] <<security>> as SEC
-    component [AdminController\n/api/admin/**] <<ctrl>> as ADMIN
-    component [CustomerController\n/api/customers/**] <<ctrl>> as CUST
-    component [AccountController\n/api/accounts/**] <<ctrl>> as ACC
-    component [GlobalExceptionHandler] <<ctrl>> as EXC
+    component [Security Filter\nBankUserDetailsService]   <<security>> as SEC
+    component [AdminController\n/api/admin/**]            <<ctrl>>     as ADMIN
+    component [CustomerController\n/api/customers/**]     <<ctrl>>     as CUST
+    component [AccountController\n/api/accounts/**]       <<ctrl>>     as ACC
+    component [GlobalExceptionHandler]                    <<ctrl>>     as EXC
 }
 
 ' ════════════════════════════════════════════════
@@ -73,28 +82,27 @@ package "« T H E   H E X A G O N »" <<hexagon>> {
 
     ' ── PORTS IN ───────────────────────────────
     package "Ports In  (Driving / Inbound)" <<port_in>> {
-        interface CreateCustomerUseCase
-        interface DeleteCustomerUseCase
-        interface ListCustomersUseCase
-        interface ChangePasswordUseCase
-        interface SetTransferFeeUseCase
-        interface CreateAccountUseCase
-        interface DepositMoneyUseCase
-        interface WithdrawMoneyUseCase
-        interface GetBalanceUseCase
-        interface GetTransactionsUseCase
-        interface ListAccountsUseCase
-        interface TransferMoneyUseCase
+        component [CreateCustomerUseCase]   <<interface>> as UC_CC
+        component [DeleteCustomerUseCase]   <<interface>> as UC_DC
+        component [ListCustomersUseCase]    <<interface>> as UC_LC
+        component [ChangePasswordUseCase]   <<interface>> as UC_CP
+        component [SetTransferFeeUseCase]   <<interface>> as UC_SF
+        component [CreateAccountUseCase]    <<interface>> as UC_CA
+        component [DepositMoneyUseCase]     <<interface>> as UC_DM
+        component [WithdrawMoneyUseCase]    <<interface>> as UC_WM
+        component [GetBalanceUseCase]       <<interface>> as UC_GB
+        component [GetTransactionsUseCase]  <<interface>> as UC_GT
+        component [ListAccountsUseCase]     <<interface>> as UC_LA
+        component [TransferMoneyUseCase]    <<interface>> as UC_TM
     }
 
     ' ── APPLICATION LAYER ───────────────────────
     package "Application Layer" <<app>> {
         component [CustomerApplicationService\n@Service  @Transactional] <<svc>> as CSVC
-        component [AccountApplicationService\n@Service  @Transactional] <<svc>> as ASVC
+        component [AccountApplicationService\n@Service  @Transactional]  <<svc>> as ASVC
         note right of CSVC
-          Orchestrates:
-          domain + ports out
-          No business rules
+          Orchestrates domain + ports out.
+          No business rules here.
         end note
     }
 
@@ -102,34 +110,34 @@ package "« T H E   H E X A G O N »" <<hexagon>> {
     package "Domain Layer  (pure Java — no framework)" <<domain>> {
 
         package "Entities" <<domain>> {
-            class Customer    <<entity>>
-            class Account     <entity>>
-            class Transaction <<entity>>
+            component [Customer]    <<entity>> as ENT_C
+            component [Account]     <<entity>> as ENT_A
+            component [Transaction] <<entity>> as ENT_T
         }
 
         package "Value Objects" <<domain>> {
-            class Money           <<record>>
-            class Password        <<record>>
-            class CustomerId      <<record>>
-            class AccountId       <<record>>
-            class TransactionId   <<record>>
-            enum  Currency
-            enum  TransactionType
+            component [Money]          <<record>> as VO_M
+            component [Password]       <<record>> as VO_P
+            component [CustomerId]     <<record>> as VO_CI
+            component [AccountId]      <<record>> as VO_AI
+            component [TransactionId]  <<record>> as VO_TI
+            component [Currency]       <<enum>>   as VO_CY
+            component [TransactionType]<<enum>>   as VO_TT
         }
 
         package "Domain Services" <<domain>> {
-            class PasswordValidationService <<service>>
-            class TransferDomainService     <<service>>
+            component [PasswordValidationService] <<service>> as DS_PV
+            component [TransferDomainService]     <<service>> as DS_TD
         }
     }
 
     ' ── PORTS OUT ──────────────────────────────
     package "Ports Out  (Driven / Outbound)" <<port_out>> {
-        interface CustomerRepositoryPort
-        interface AccountRepositoryPort
-        interface TransactionRepositoryPort
-        interface PasswordHasherPort
-        interface SettingsRepositoryPort
+        component [CustomerRepositoryPort]    <<interface>> as PO_CR
+        component [AccountRepositoryPort]     <<interface>> as PO_AR
+        component [TransactionRepositoryPort] <<interface>> as PO_TR
+        component [PasswordHasherPort]        <<interface>> as PO_PH
+        component [SettingsRepositoryPort]    <<interface>> as PO_SR
     }
 }
 
@@ -137,10 +145,10 @@ package "« T H E   H E X A G O N »" <<hexagon>> {
 ' OUTBOUND ADAPTERS
 ' ════════════════════════════════════════════════
 package "Outbound Adapters" <<outbound>> {
-    component [CustomerPersistenceAdapter]     <<adapter>> as CP
-    component [AccountPersistenceAdapter]      <<adapter>> as AP
-    component [TransactionPersistenceAdapter]  <<adapter>> as TP
-    component [SettingsPersistenceAdapter]     <<adapter>> as SP
+    component [CustomerPersistenceAdapter]    <<adapter>> as CP
+    component [AccountPersistenceAdapter]     <<adapter>> as AP
+    component [TransactionPersistenceAdapter] <<adapter>> as TP
+    component [SettingsPersistenceAdapter]    <<adapter>> as SP
     component [BCryptPasswordHasherAdapter\n(strength 12)] <<adapter>> as BCRYPT
 }
 
@@ -152,74 +160,74 @@ database "PostgreSQL\n──────────────────\ncu
 ' ════════════════════════════════════════════════
 ' CONNECTIONS — INBOUND SIDE
 ' ════════════════════════════════════════════════
-Admin    --> SEC  : HTTPS
-Customer --> SEC  : HTTPS
+Admin    --> SEC : HTTPS
+Customer --> SEC : HTTPS
 
-SEC   --> ADMIN
-SEC   --> CUST
-SEC   --> ACC
+SEC --> ADMIN
+SEC --> CUST
+SEC --> ACC
 
-ADMIN --> CreateCustomerUseCase
-ADMIN --> DeleteCustomerUseCase
-ADMIN --> ListCustomersUseCase
-ADMIN --> SetTransferFeeUseCase
-CUST  --> ChangePasswordUseCase
-ACC   --> CreateAccountUseCase
-ACC   --> DepositMoneyUseCase
-ACC   --> WithdrawMoneyUseCase
-ACC   --> GetBalanceUseCase
-ACC   --> GetTransactionsUseCase
-ACC   --> ListAccountsUseCase
-ACC   --> TransferMoneyUseCase
-
-' ════════════════════════════════════════════════
-' CONNECTIONS — USE CASES → APPLICATION SERVICES
-' ════════════════════════════════════════════════
-CSVC ..|> CreateCustomerUseCase
-CSVC ..|> DeleteCustomerUseCase
-CSVC ..|> ListCustomersUseCase
-CSVC ..|> ChangePasswordUseCase
-CSVC ..|> SetTransferFeeUseCase
-
-ASVC ..|> CreateAccountUseCase
-ASVC ..|> DepositMoneyUseCase
-ASVC ..|> WithdrawMoneyUseCase
-ASVC ..|> GetBalanceUseCase
-ASVC ..|> GetTransactionsUseCase
-ASVC ..|> ListAccountsUseCase
-ASVC ..|> TransferMoneyUseCase
+ADMIN --> UC_CC
+ADMIN --> UC_DC
+ADMIN --> UC_LC
+ADMIN --> UC_SF
+CUST  --> UC_CP
+ACC   --> UC_CA
+ACC   --> UC_DM
+ACC   --> UC_WM
+ACC   --> UC_GB
+ACC   --> UC_GT
+ACC   --> UC_LA
+ACC   --> UC_TM
 
 ' ════════════════════════════════════════════════
-' CONNECTIONS — APPLICATION → DOMAIN
+' APPLICATION SERVICES implement PORTS IN
 ' ════════════════════════════════════════════════
-CSVC --> Customer
-CSVC --> PasswordValidationService
-ASVC --> Account
-ASVC --> Transaction
-ASVC --> TransferDomainService
-ASVC --> Money
+CSVC ..> UC_CC : implements
+CSVC ..> UC_DC : implements
+CSVC ..> UC_LC : implements
+CSVC ..> UC_CP : implements
+CSVC ..> UC_SF : implements
+
+ASVC ..> UC_CA : implements
+ASVC ..> UC_DM : implements
+ASVC ..> UC_WM : implements
+ASVC ..> UC_GB : implements
+ASVC ..> UC_GT : implements
+ASVC ..> UC_LA : implements
+ASVC ..> UC_TM : implements
 
 ' ════════════════════════════════════════════════
-' CONNECTIONS — APPLICATION → PORTS OUT
+' APPLICATION SERVICES use DOMAIN
 ' ════════════════════════════════════════════════
-CSVC --> CustomerRepositoryPort
-CSVC --> PasswordHasherPort
-CSVC --> SettingsRepositoryPort
-ASVC --> AccountRepositoryPort
-ASVC --> TransactionRepositoryPort
-ASVC --> SettingsRepositoryPort
+CSVC --> ENT_C
+CSVC --> DS_PV
+ASVC --> ENT_A
+ASVC --> ENT_T
+ASVC --> DS_TD
+ASVC --> VO_M
 
 ' ════════════════════════════════════════════════
-' CONNECTIONS — PORTS OUT → OUTBOUND ADAPTERS
+' APPLICATION SERVICES call PORTS OUT
 ' ════════════════════════════════════════════════
-CP     ..|> CustomerRepositoryPort
-AP     ..|> AccountRepositoryPort
-TP     ..|> TransactionRepositoryPort
-SP     ..|> SettingsRepositoryPort
-BCRYPT ..|> PasswordHasherPort
+CSVC --> PO_CR
+CSVC --> PO_PH
+CSVC --> PO_SR
+ASVC --> PO_AR
+ASVC --> PO_TR
+ASVC --> PO_SR
 
 ' ════════════════════════════════════════════════
-' CONNECTIONS — OUTBOUND ADAPTERS → DATABASE
+' OUTBOUND ADAPTERS implement PORTS OUT
+' ════════════════════════════════════════════════
+CP     ..> PO_CR : implements
+AP     ..> PO_AR : implements
+TP     ..> PO_TR : implements
+SP     ..> PO_SR : implements
+BCRYPT ..> PO_PH : implements
+
+' ════════════════════════════════════════════════
+' OUTBOUND ADAPTERS → DATABASE
 ' ════════════════════════════════════════════════
 CP --> DB
 AP --> DB

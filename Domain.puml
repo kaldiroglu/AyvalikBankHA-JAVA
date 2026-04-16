@@ -11,7 +11,7 @@ skinparam class {
     BackgroundColor White
     BorderColor #555
     ArrowColor #333
-    FontSize 12
+    FontSize 11
 }
 skinparam stereotype {
     CBackgroundColor<<entity>>  #DDEEFF
@@ -23,11 +23,10 @@ skinparam stereotype {
 }
 
 ' ─────────────────────────────────────────
-' PACKAGE: model
+' PACKAGE: domain.model
 ' ─────────────────────────────────────────
 package "domain.model" {
 
-    ' ── Enums ──────────────────────────────
     enum Currency {
         USD
         EUR
@@ -41,7 +40,6 @@ package "domain.model" {
         TRANSFER_IN
     }
 
-    ' ── Value Objects (records) ─────────────
     class CustomerId <<record>> {
         + UUID value
         --
@@ -84,7 +82,6 @@ package "domain.model" {
         + boolean isGreaterThanOrEqualTo(Money)
     }
 
-    ' ── Entities ───────────────────────────
     class Customer <<entity>> {
         - CustomerId id
         - String name
@@ -93,8 +90,8 @@ package "domain.model" {
         - Password currentPassword
         - List<Password> passwordHistory
         --
-        + {static} Customer create(String name, String email, Password)
-        + void changePassword(Password newPassword)
+        + {static} Customer create(String, String, Password)
+        + void changePassword(Password)
         + List<Password> getAllPasswordsForReuseCheck()
         + CustomerId getId()
         + String getName()
@@ -111,10 +108,10 @@ package "domain.model" {
         - Money balance
         --
         + {static} Account open(CustomerId, Currency)
-        + Transaction deposit(Money amount)
-        + Transaction withdraw(Money amount)
-        + Transaction transferOut(Money amount, Money fee, String targetId)
-        + Transaction transferIn(Money amount, String sourceId)
+        + Transaction deposit(Money)
+        + Transaction withdraw(Money)
+        + Transaction transferOut(Money, Money, String)
+        + Transaction transferIn(Money, String)
         + AccountId getId()
         + CustomerId getOwnerId()
         + Currency getCurrency()
@@ -138,22 +135,18 @@ package "domain.model" {
         + String getDescription()
     }
 
-    ' ── Relationships ───────────────────────
-    Customer  "1" *-right- "1"     CustomerId     : id
-    Customer  "1" *-down-  "1"     Password       : currentPassword
-    Customer  "1" *-down-  "0..3"  Password       : passwordHistory
-
-    Account   "1" *-right- "1"     AccountId      : id
-    Account   "1" *-down-  "1"     Money          : balance
-    Account   "1" o-right- "1"     CustomerId     : ownerId
-    Account   "1" o-right- "1"     Currency
-
-    Transaction "1" *-right- "1"   TransactionId  : id
-    Transaction "1" *-down-  "1"   Money          : amount
-    Transaction "1" o-right- "1"   AccountId      : accountId
-    Transaction "1" o-right- "1"   TransactionType
-
-    Money "1" o-right- "1" Currency
+    Customer    "1" *-right- "1"    CustomerId    : id
+    Customer    "1" *-down-  "1"    Password      : currentPassword
+    Customer    "1" *-down-  "0..3" Password      : passwordHistory
+    Account     "1" *-right- "1"    AccountId     : id
+    Account     "1" *-down-  "1"    Money         : balance
+    Account     "1" o-right- "1"    CustomerId    : ownerId
+    Account     "1" o-right- "1"    Currency
+    Transaction "1" *-right- "1"    TransactionId : id
+    Transaction "1" *-down-  "1"    Money         : amount
+    Transaction "1" o-right- "1"    AccountId     : accountId
+    Transaction "1" o-right- "1"    TransactionType
+    Money       "1" o-right- "1"    Currency
 }
 
 ' ─────────────────────────────────────────
@@ -166,7 +159,7 @@ package "domain.service" {
     }
 
     class TransferDomainService <<service>> {
-        + Money calculateFee(Money amount, boolean sameCustomer, BigDecimal feePercent)
+        + Money calculateFee(Money, boolean, BigDecimal)
     }
 }
 
@@ -174,18 +167,20 @@ TransferDomainService ..> Money : "returns"
 
 ' ─────────────────────────────────────────
 ' PACKAGE: domain.port.in  (Use Cases)
+' Command records are nested classes shown
+' with +-- (inner class) relationship.
 ' ─────────────────────────────────────────
 package "domain.port.in" {
 
     interface CreateCustomerUseCase {
         + Customer createCustomer(Command)
-        --
-        class Command <<record>>
-        .. Command fields ..
-        name : String
-        email : String
-        rawPassword : String
     }
+    class CreateCustomerCommand <<record>> {
+        + String name
+        + String email
+        + String rawPassword
+    }
+    CreateCustomerUseCase +-- CreateCustomerCommand
 
     interface DeleteCustomerUseCase {
         + void deleteCustomer(CustomerId)
@@ -197,39 +192,39 @@ package "domain.port.in" {
 
     interface ChangePasswordUseCase {
         + void changePassword(Command)
-        --
-        class Command <<record>>
-        .. Command fields ..
-        customerId : CustomerId
-        rawNewPassword : String
     }
+    class ChangePasswordCommand <<record>> {
+        + CustomerId customerId
+        + String rawNewPassword
+    }
+    ChangePasswordUseCase +-- ChangePasswordCommand
 
     interface CreateAccountUseCase {
         + Account createAccount(Command)
-        --
-        class Command <<record>>
-        .. Command fields ..
-        ownerId : CustomerId
-        currency : Currency
     }
+    class CreateAccountCommand <<record>> {
+        + CustomerId ownerId
+        + Currency currency
+    }
+    CreateAccountUseCase +-- CreateAccountCommand
 
     interface DepositMoneyUseCase {
         + Transaction deposit(Command)
-        --
-        class Command <<record>>
-        .. Command fields ..
-        accountId : AccountId
-        amount : Money
     }
+    class DepositMoneyCommand <<record>> {
+        + AccountId accountId
+        + Money amount
+    }
+    DepositMoneyUseCase +-- DepositMoneyCommand
 
     interface WithdrawMoneyUseCase {
         + Transaction withdraw(Command)
-        --
-        class Command <<record>>
-        .. Command fields ..
-        accountId : AccountId
-        amount : Money
     }
+    class WithdrawMoneyCommand <<record>> {
+        + AccountId accountId
+        + Money amount
+    }
+    WithdrawMoneyUseCase +-- WithdrawMoneyCommand
 
     interface GetBalanceUseCase {
         + Money getBalance(AccountId)
@@ -245,25 +240,25 @@ package "domain.port.in" {
 
     interface TransferMoneyUseCase {
         + void transfer(Command)
-        --
-        class Command <<record>>
-        .. Command fields ..
-        sourceAccountId : AccountId
-        targetAccountId : AccountId
-        amount : Money
     }
+    class TransferMoneyCommand <<record>> {
+        + AccountId sourceAccountId
+        + AccountId targetAccountId
+        + Money amount
+    }
+    TransferMoneyUseCase +-- TransferMoneyCommand
 
     interface SetTransferFeeUseCase {
         + void setTransferFee(Command)
-        --
-        class Command <<record>>
-        .. Command fields ..
-        feePercent : BigDecimal
     }
+    class SetTransferFeeCommand <<record>> {
+        + BigDecimal feePercent
+    }
+    SetTransferFeeUseCase +-- SetTransferFeeCommand
 }
 
 ' ─────────────────────────────────────────
-' PACKAGE: domain.port.out  (Repository & Infrastructure Ports)
+' PACKAGE: domain.port.out
 ' ─────────────────────────────────────────
 package "domain.port.out" {
 
@@ -306,14 +301,13 @@ CreateCustomerUseCase  ..> Customer     : "returns"
 ListCustomersUseCase   ..> Customer     : "returns"
 DeleteCustomerUseCase  ..> CustomerId   : "uses"
 ChangePasswordUseCase  ..> CustomerId   : "uses"
-
 CreateAccountUseCase   ..> Account      : "returns"
 ListAccountsUseCase    ..> Account      : "returns"
 DepositMoneyUseCase    ..> Transaction  : "returns"
 WithdrawMoneyUseCase   ..> Transaction  : "returns"
 GetBalanceUseCase      ..> Money        : "returns"
 GetTransactionsUseCase ..> Transaction  : "returns"
-TransferMoneyUseCase   ..> AccountId   : "uses"
+TransferMoneyUseCase   ..> AccountId    : "uses"
 
 CustomerRepositoryPort    ..> Customer    : "manages"
 AccountRepositoryPort     ..> Account     : "manages"
