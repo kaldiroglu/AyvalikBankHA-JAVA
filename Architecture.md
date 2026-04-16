@@ -8,8 +8,8 @@ The core idea is the **Dependency Rule**: every arrow points inward. The domain 
 ┌─────────────────────────────────────────────────────┐
 │  ADAPTERS (outer)                                   │
 │  ┌───────────────┐         ┌──────────────────────┐ │
-│  │ REST           │        │ JPA Persistence      │ │
-│  │ Controllers    │        │ + BCrypt Adapter     │ │
+│  │ REST          │         │ JPA Persistence      │ │
+│  │ Controllers   │         │ + BCrypt Adapter     │ │
 │  └──────┬────────┘         └──────────┬───────────┘ │
 │         │                             │             │
 │  ┌──────▼─────────────────────────────▼───────────┐ │
