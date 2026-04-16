@@ -184,7 +184,7 @@ classDiagram
         +String email
         +String rawPassword
     }
-    CreateCustomerUseCase +-- `CreateCustomerUseCase.Command`
+    CreateCustomerUseCase ..> `CreateCustomerUseCase.Command`
 
     class DeleteCustomerUseCase {
         <<interface>>
@@ -205,7 +205,7 @@ classDiagram
         +CustomerId customerId
         +String rawNewPassword
     }
-    ChangePasswordUseCase +-- `ChangePasswordUseCase.Command`
+    ChangePasswordUseCase ..> `ChangePasswordUseCase.Command`
 
     class CreateAccountUseCase {
         <<interface>>
@@ -216,7 +216,7 @@ classDiagram
         +CustomerId ownerId
         +Currency currency
     }
-    CreateAccountUseCase +-- `CreateAccountUseCase.Command`
+    CreateAccountUseCase  ..> `CreateAccountUseCase.Command`
 
     class DepositMoneyUseCase {
         <<interface>>
@@ -227,7 +227,7 @@ classDiagram
         +AccountId accountId
         +Money amount
     }
-    DepositMoneyUseCase +-- `DepositMoneyUseCase.Command`
+    DepositMoneyUseCase ..> `DepositMoneyUseCase.Command`
 
     class WithdrawMoneyUseCase {
         <<interface>>
@@ -238,7 +238,7 @@ classDiagram
         +AccountId accountId
         +Money amount
     }
-    WithdrawMoneyUseCase +-- `WithdrawMoneyUseCase.Command`
+    WithdrawMoneyUseCase ..> `WithdrawMoneyUseCase.Command`
 
     class GetBalanceUseCase {
         <<interface>>
@@ -265,7 +265,7 @@ classDiagram
         +AccountId targetAccountId
         +Money amount
     }
-    TransferMoneyUseCase +-- `TransferMoneyUseCase.Command`
+    TransferMoneyUseCase ..> `TransferMoneyUseCase.Command`
 
     class SetTransferFeeUseCase {
         <<interface>>
@@ -275,7 +275,7 @@ classDiagram
         <<record>>
         +BigDecimal feePercent
     }
-    SetTransferFeeUseCase +-- `SetTransferFeeUseCase.Command`
+    SetTransferFeeUseCase ..> `SetTransferFeeUseCase.Command`
 ```
 
 ---
