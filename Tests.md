@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-74 tests across 8 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+100 tests across 8 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -19,15 +19,15 @@ mvn test -Dtest=AccountControllerTest
 ```
                        ┌────────────────────────────┐
                        │     Controller Tests       │  @WebMvcTest
-                       │ (MockMvc, mocked use cases)│  36 tests
+                       │ (MockMvc, mocked use cases)│  43 tests
                        └────────────────────────────┘
                ┌──────────────────────────────────────────────┐
                │          Application Service Tests           │  Mockito only
-               │    (mocked ports, real domain objects)       │  13 tests
+               │    (mocked ports, real domain objects)       │  18 tests
                └──────────────────────────────────────────────┘
       ┌──────────────────────────────────────────────────────────────┐
       │                     Domain Unit Tests                        │  Pure Java
-      │                (no mocks, no Spring, no I/O)                 │  25 tests
+      │                (no mocks, no Spring, no I/O)                 │  39 tests
       └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -57,11 +57,13 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 
 ---
 
-### `AccountTest` — 7 tests
+### `AccountTest` — 21 tests
 
 **Class under test:** `domain/model/Account.java` (entity)
 
-`Account` is a rich entity. Its methods — `deposit`, `withdraw`, `transferOut`, `transferIn` — enforce currency matching and balance invariants, and each returns a `Transaction` object.
+`Account` is a rich entity. Its methods — `deposit`, `withdraw`, `transferOut`, `transferIn` — enforce currency matching and balance invariants, and each returns a `Transaction` object. It also owns an `AccountStatus` state machine with `freeze()`, `unfreeze()`, and `close()` transitions.
+
+#### Balance and currency invariants
 
 | Test | What it verifies |
 |------|-----------------|
@@ -72,6 +74,40 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 | `shouldRejectDepositWithWrongCurrency` | Depositing EUR into a USD account throws `IllegalArgumentException` mentioning "currency". |
 | `shouldTransferOutWithFeeDeducted` | `transferOut(200 USD, fee=2 USD, ...)` deducts 202 from a 1000 USD balance, leaving 798. |
 | `shouldTransferInAndIncreaseBalance` | `transferIn(300 USD, ...)` credits the account, raising balance from 0 to 300. |
+
+#### Status: initial state
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldOpenAccountWithActiveStatus` | `Account.open(...)` starts with `AccountStatus.ACTIVE`. |
+
+#### Status: freeze / unfreeze transitions
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldFreezeActiveAccount` | `freeze()` on an ACTIVE account sets status to `FROZEN`. |
+| `shouldUnfreezeAccount` | `freeze()` followed by `unfreeze()` returns status to `ACTIVE`. |
+| `shouldRejectFreezingAlreadyFrozenAccount` | `freeze()` on a FROZEN account throws `IllegalStateException` with "already frozen". |
+| `shouldRejectUnfreezingActiveAccount` | `unfreeze()` on an ACTIVE account throws `IllegalStateException` with "not frozen". |
+
+#### Status: close transitions
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldCloseActiveAccount` | `close()` on an ACTIVE account sets status to `CLOSED`. |
+| `shouldCloseFrozenAccount` | `close()` on a FROZEN account also sets status to `CLOSED`. |
+| `shouldRejectClosingAlreadyClosedAccount` | `close()` on a CLOSED account throws `IllegalStateException` with "already closed". |
+| `shouldRejectFreezingClosedAccount` | `freeze()` on a CLOSED account throws `IllegalStateException` with "closed". |
+| `shouldRejectUnfreezingClosedAccount` | `unfreeze()` on a CLOSED account throws `IllegalStateException` with "closed". |
+
+#### Status: operation guards
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldRejectDepositOnFrozenAccount` | `deposit(...)` on a FROZEN account throws `IllegalStateException` with "frozen". |
+| `shouldRejectWithdrawOnClosedAccount` | `withdraw(...)` on a CLOSED account throws `IllegalStateException` with "closed". |
+| `shouldRejectTransferOutOnFrozenAccount` | `transferOut(...)` on a FROZEN account throws `IllegalStateException` with "frozen". |
+| `shouldRejectTransferInOnClosedAccount` | `transferIn(...)` on a CLOSED account throws `IllegalStateException` with "closed". |
 
 ---
 
@@ -131,12 +167,14 @@ These tests cover the orchestration layer. All repository and infrastructure por
 
 ---
 
-### `AccountApplicationServiceTest` — 7 tests
+### `AccountApplicationServiceTest` — 12 tests
 
 **Class under test:** `application/service/AccountApplicationService.java`
 
 **Mocked ports:** `AccountRepositoryPort`, `CustomerRepositoryPort`, `TransactionRepositoryPort`, `SettingsRepositoryPort`
 **Real domain objects:** `Account`, `Transaction`, `TransferDomainService`
+
+#### Account operations
 
 | Test | What it verifies |
 |------|-----------------|
@@ -147,6 +185,16 @@ These tests cover the orchestration layer. All repository and infrastructure por
 | `shouldTransferBetweenAccountsOfSameCustomerFreeOfCharge` | Transfer between two accounts owned by the same customer applies 0% fee regardless of the configured rate. Source ends at 300, target at 200. |
 | `shouldDeductFeeForTransferBetweenDifferentCustomers` | Transfer between accounts of different customers with 1% fee deducts 202 from source (200 + 2 fee) and credits 200 to target. |
 | `shouldThrowOnWithdrawExceedingBalance` | `withdraw` propagates the `IllegalArgumentException("Insufficient funds")` thrown by the domain entity when the amount exceeds the balance. |
+
+#### Account status management
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldFreezeAccount` | `freezeAccount` loads the account, calls `account.freeze()`, saves it; status on the in-memory account becomes `FROZEN`. |
+| `shouldUnfreezeAccount` | `unfreezeAccount` loads a FROZEN account, calls `account.unfreeze()`, saves it; status returns to `ACTIVE`. |
+| `shouldCloseAccount` | `closeAccount` loads the account, calls `account.close()`, saves it; status becomes `CLOSED`. |
+| `shouldThrowAccountNotOperableWhenFreezingClosedAccount` | When the domain entity throws `IllegalStateException` (e.g. freezing a closed account), the service wraps it in `AccountNotOperableException`. |
+| `shouldThrowAccountNotFoundWhenFreezingMissingAccount` | `freezeAccount` throws `AccountNotFoundException` when `findById` returns empty. |
 
 ---
 
@@ -163,7 +211,7 @@ No real application service or database is involved. The goal is to verify:
 
 ---
 
-### `AdminControllerTest` — 12 tests
+### `AdminControllerTest` — 19 tests
 
 **Controller:** `adapter/in/web/AdminController.java` (`/api/admin/**`)
 **Required role:** `ROLE_ADMIN`
@@ -199,6 +247,28 @@ No real application service or database is involved. The goal is to verify:
 | `setTransferFee_returnsOk` | Valid `feePercent` → 200; verifies use case received the exact `Command(1.5)`. |
 | `setTransferFee_returnsBadRequestForNegativeValue` | `feePercent: -1.0` → 400; use case never called. |
 | `setTransferFee_returnsBadRequestForValueAbove100` | `feePercent: 101.0` → 400 (`@DecimalMax("100.0")` constraint). |
+
+#### `PUT /api/admin/accounts/{id}/freeze`
+
+| Test | What it verifies |
+|------|-----------------|
+| `freezeAccount_returnsOk` | Use case succeeds → 200; verifies `freezeAccount` use case was called. |
+| `freezeAccount_returnsUnprocessableEntityForInvalidTransition` | Use case throws `AccountNotOperableException` (e.g. already frozen) → 422. |
+
+#### `PUT /api/admin/accounts/{id}/unfreeze`
+
+| Test | What it verifies |
+|------|-----------------|
+| `unfreezeAccount_returnsOk` | Use case succeeds → 200. |
+| `unfreezeAccount_returnsUnprocessableEntityForInvalidTransition` | Use case throws `AccountNotOperableException` (e.g. not frozen) → 422. |
+
+#### `PUT /api/admin/accounts/{id}/close`
+
+| Test | What it verifies |
+|------|-----------------|
+| `closeAccount_returnsOk` | Use case succeeds → 200. |
+| `closeAccount_returnsUnprocessableEntityForAlreadyClosed` | Use case throws `AccountNotOperableException` (already closed) → 422. |
+| `closeAccount_returnsForbiddenForCustomerRole` | `ROLE_CUSTOMER` → 403. |
 
 ---
 
@@ -288,6 +358,7 @@ No real application service or database is involved. The goal is to verify:
 |-----------|-------------|-----------|
 | `CustomerNotFoundException` | 404 Not Found | `AdminControllerTest`, `CustomerControllerTest` |
 | `AccountNotFoundException` | 404 Not Found | `AccountControllerTest` |
+| `AccountNotOperableException` | 422 Unprocessable Entity | `AdminControllerTest` |
 | `InsufficientFundsException` | 422 Unprocessable Entity | `AccountControllerTest` |
 | `InvalidPasswordException` | 400 Bad Request | `CustomerControllerTest` |
 | `PasswordReusedException` | 409 Conflict | `CustomerControllerTest` |

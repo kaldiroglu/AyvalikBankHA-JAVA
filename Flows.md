@@ -305,3 +305,47 @@ sequenceDiagram
 
     Ctrl-->>Cust: 200 OK {amount, currency}
 ```
+
+---
+
+## 7. FreezeAccountUseCase
+
+Admin freezes an account. The state transition lives entirely in the `Account` domain entity.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin
+    participant Security as Security Filter
+    participant Ctrl     as AdminController
+    participant AppSvc  as AccountApplicationService
+    participant Account as Account (entity)
+    participant AccRepo as AccountPersistenceAdapter
+    participant DB      as PostgreSQL
+
+    Admin->>Security: PUT /api/admin/accounts/{id}/freeze<br/>Basic Auth header
+    Security->>Security: authenticate + hasRole(ROLE_ADMIN) ✓
+    Security->>Ctrl: forward request
+
+    Ctrl->>AppSvc: freezeAccount(AccountId)
+
+    AppSvc->>AccRepo: findById(accountId)
+    AccRepo->>DB: SELECT * FROM accounts WHERE id=?
+    DB-->>AccRepo: AccountJpaEntity{status=ACTIVE, ...}
+    AccRepo-->>AppSvc: Account domain object
+
+    AppSvc->>Account: freeze()
+    Note over Account: guards: status must be ACTIVE<br/>throws IllegalStateException<br/>if FROZEN or CLOSED<br/>sets status = FROZEN
+    Account-->>AppSvc: (status updated in memory)
+
+    AppSvc->>AccRepo: save(account)
+    AccRepo->>DB: UPDATE accounts SET status='FROZEN' WHERE id=?
+    DB-->>AccRepo: OK
+
+    AppSvc-->>Ctrl: void
+    Ctrl-->>Admin: 200 OK
+```
+
+> **Unfreeze** (`PUT /api/admin/accounts/{id}/unfreeze`) follows the same flow with `account.unfreeze()`: requires `FROZEN`, sets `ACTIVE`.
+>
+> **Close** (`PUT /api/admin/accounts/{id}/close`) follows the same flow with `account.close()`: accepts `ACTIVE` or `FROZEN`, sets `CLOSED` (terminal — no further transitions possible).

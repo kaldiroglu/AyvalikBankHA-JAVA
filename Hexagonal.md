@@ -38,6 +38,9 @@
                    │       │  GetBalanceUseCase       │       │
                    │       │  GetTransactionsUseCase  │       │
                    │       │  ListAccountsUseCase     │       │
+                   │       │  FreezeAccountUseCase    │       │
+                   │       │  UnfreezeAccountUseCase  │       │
+                   │       │  CloseAccountUseCase     │       │
                    │       └────────────┬────────────┘        │
                    │                    │  implemented by     │
                    │       ┌────────────▼────────────┐        │
@@ -58,6 +61,7 @@
                    │       │  CustomerId  AccountId   │       │
                    │       │  TransactionId           │       │
                    │       │  Currency  TransactionType│      │
+                   │       │  AccountStatus           │       │
                    │       │  ── Domain Services ──   │       │
                    │       │  PasswordValidationSvc   │       │
                    │       │  TransferDomainService   │       │
@@ -117,7 +121,7 @@ flowchart TB
 
         subgraph PORTS_IN["Ports In — Use Cases"]
             direction LR
-            PIC["CreateCustomerUseCase · DeleteCustomerUseCase · ListCustomersUseCase\nChangePasswordUseCase · SetTransferFeeUseCase · CreateAccountUseCase\nDepositMoneyUseCase · WithdrawMoneyUseCase · TransferMoneyUseCase\nGetBalanceUseCase · GetTransactionsUseCase · ListAccountsUseCase"]
+            PIC["CreateCustomerUseCase · DeleteCustomerUseCase · ListCustomersUseCase\nChangePasswordUseCase · SetTransferFeeUseCase · CreateAccountUseCase\nDepositMoneyUseCase · WithdrawMoneyUseCase · TransferMoneyUseCase\nGetBalanceUseCase · GetTransactionsUseCase · ListAccountsUseCase\nFreezeAccountUseCase · UnfreezeAccountUseCase · CloseAccountUseCase"]
         end
 
         subgraph APP["Application Layer"]
@@ -129,7 +133,7 @@ flowchart TB
         subgraph DOMAIN["Domain Layer — Pure Java"]
             direction TB
             ENT["Entities\nCustomer · Account · Transaction"]
-            VO["Value Objects\nMoney · Password · CustomerId · AccountId · TransactionId\nCurrency · TransactionType"]
+            VO["Value Objects\nMoney · Password · CustomerId · AccountId · TransactionId\nCurrency · TransactionType · AccountStatus"]
             DS["Domain Services\nPasswordValidationService · TransferDomainService"]
         end
 
@@ -175,8 +179,8 @@ flowchart TB
 
 | Zone | Contents | Depends on |
 |------|----------|-----------|
-| Domain Layer | Entities, Value Objects, Domain Services | Nothing |
-| Ports In | Use-case interfaces + Command records | Domain model types only |
+| Domain Layer | Entities (`Customer`, `Account`, `Transaction`), Value Objects, `AccountStatus` state machine, Domain Services | Nothing |
+| Ports In | 15 use-case interfaces + Command records | Domain model types only |
 | Ports Out | Repository + infrastructure interfaces | Domain model types only |
 | Application Layer | Application services | Domain layer + Ports In + Ports Out |
 | Inbound Adapters | REST controllers, Security | Application layer (via Ports In) |

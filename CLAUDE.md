@@ -46,6 +46,7 @@ domain/port/out/         → Repository and infrastructure interfaces
 - **Rich entities**: `Account` exposes `deposit()`, `withdraw()`, `transferOut()`, `transferIn()` which return `Transaction` objects and enforce all invariants.
 - **Password history**: `Customer` holds `currentPassword` + up to 3 previous hashes. Reuse checking (BCrypt) lives in `CustomerApplicationService` since it requires the `PasswordHasherPort`.
 - **Transfer fee**: free for same-customer transfers; `TransferDomainService.calculateFee()` applies the admin-configured percentage for cross-customer transfers. Fee stored in `settings` table.
+- **Account status**: `AccountStatus` enum (`ACTIVE`, `FROZEN`, `CLOSED`) is a state machine inside `Account`. All mutating operations (`deposit`, `withdraw`, `transferOut`, `transferIn`) call `requireActive()` first. Transitions: `freeze()`, `unfreeze()`, `close()` — `CLOSED` is terminal. Invalid transitions throw `IllegalStateException`; the application service converts this to `AccountNotOperableException` → HTTP 422.
 - **Authentication**: HTTP Basic Auth via Spring Security. Credentials loaded from the `customers` table by `BankUserDetailsService`. Roles: `ADMIN`, `CUSTOMER`.
 - **JPA DTOs**: `CustomerJpaEntity`, `AccountJpaEntity`, `TransactionJpaEntity`, `SettingsJpaEntity`, `PasswordHistoryJpaEntity` — none of these cross the persistence adapter boundary.
 
@@ -57,6 +58,9 @@ domain/port/out/         → Repository and infrastructure interfaces
 | DELETE | `/api/admin/customers/{id}` | ADMIN | Delete customer |
 | GET | `/api/admin/customers` | ADMIN | List all customers |
 | PUT | `/api/admin/settings/transfer-fee` | ADMIN | Set transfer fee % |
+| PUT | `/api/admin/accounts/{id}/freeze` | ADMIN | Freeze account |
+| PUT | `/api/admin/accounts/{id}/unfreeze` | ADMIN | Unfreeze account |
+| PUT | `/api/admin/accounts/{id}/close` | ADMIN | Close account (terminal) |
 | PUT | `/api/customers/{id}/password` | CUSTOMER | Change password |
 | POST | `/api/accounts?ownerId=` | CUSTOMER | Open account |
 | GET | `/api/customers/{id}/accounts` | CUSTOMER | List accounts |
