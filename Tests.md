@@ -18,8 +18,8 @@ mvn test -Dtest=AccountControllerTest
 
 ```
                        ┌────────────────────────────┐
-                       │     Controller Tests        │  @WebMvcTest
-                       │  (MockMvc, mocked use cases)│  36 tests
+                       │     Controller Tests       │  @WebMvcTest
+                       │ (MockMvc, mocked use cases)│  36 tests
                        └────────────────────────────┘
                ┌──────────────────────────────────────────────┐
                │          Application Service Tests           │  Mockito only
