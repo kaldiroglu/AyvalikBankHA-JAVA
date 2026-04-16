@@ -44,12 +44,15 @@ package "domain.model" {
         ACTIVE
         FROZEN
         CLOSED
-        ..state machine..
-        ACTIVE → FROZEN (freeze)
-        FROZEN → ACTIVE (unfreeze)
-        ACTIVE|FROZEN → CLOSED (close)
-        CLOSED is terminal
     }
+
+    note right of AccountStatus
+      State machine (terminal = CLOSED):
+      ACTIVE  --freeze()--> FROZEN
+      FROZEN  --unfreeze()--> ACTIVE
+      ACTIVE  --close()--> CLOSED
+      FROZEN  --close()--> CLOSED
+    end note
 
     class CustomerId <<record>> {
         + UUID value
@@ -120,7 +123,7 @@ package "domain.model" {
         - AccountStatus status
         --
         + {static} Account open(CustomerId, Currency)
-        .. operations (require ACTIVE) ..
+        .. operations — require ACTIVE ..
         + Transaction deposit(Money)
         + Transaction withdraw(Money)
         + Transaction transferOut(Money, Money, String)

@@ -44,10 +44,10 @@
                    │       └────────────┬────────────┘        │
                    │                    │  implemented by     │
                    │       ┌────────────▼────────────┐        │
-                   │       │    APPLICATION LAYER     │       │
-                   │       │                          │       │
-     T H E         │       │ CustomerApplicationSvc   │       │  H E X A G O N
-                   │       │ AccountApplicationSvc    │       │
+                   │       │    APPLICATION LAYER    │        │
+                   │       │                         │        │
+     T H E         │       │ CustomerApplicationSvc  │        │  H E X A G O N
+                   │       │ AccountApplicationSvc   │        │
                    │       └────────────┬────────────┘        │
                    │                    │  uses               │
                    │       ┌────────────▼────────────┐        │
@@ -60,7 +60,7 @@
                    │       │  Money  Password         │       │
                    │       │  CustomerId  AccountId   │       │
                    │       │  TransactionId           │       │
-                   │       │  Currency  TransactionType│      │
+                   │       │  Currency TransactionType│       │
                    │       │  AccountStatus           │       │
                    │       │  ── Domain Services ──   │       │
                    │       │  PasswordValidationSvc   │       │
@@ -74,7 +74,7 @@
                    │       │  TransactionRepository   │       │
                    │       │  PasswordHasherPort      │       │
                    │       │  SettingsRepositoryPort  │       │
-                   │       └─────────────────────────┘       │
+                   │       └─────────────────────────┘        │
                     \                                        ╱
                      \                                      ╱
                       ╲────────────────────────────────────╱
