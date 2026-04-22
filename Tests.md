@@ -434,7 +434,7 @@ assertThat(tx.getType()).isEqualTo(TransactionType.DEPOSIT);
 assertThatThrownBy(account::freeze)
     .isInstanceOf(IllegalStateException.class)
     .hasMessageContaining("already frozen");
-```
+``` 
 
 **Mixed tests** — `shouldDepositAndIncreaseBalance` and `shouldWithdrawAndDecreaseBalance` test both the return value *and* the resulting balance in a single test. That is legitimate since both are part of the same operation contract.
 
