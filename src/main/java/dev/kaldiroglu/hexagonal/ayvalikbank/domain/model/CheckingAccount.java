@@ -1,7 +1,5 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.domain.model;
 
-import java.math.BigDecimal;
-
 public final class CheckingAccount extends Account {
 
     private final Money overdraftLimit;
@@ -50,7 +48,7 @@ public final class CheckingAccount extends Account {
         Money projected = this.balance.subtract(amount);
         Money lowerBound = overdraftLimit.negate();
         if (projected.amount().compareTo(lowerBound.amount()) < 0) {
-            if (overdraftLimit.amount().compareTo(BigDecimal.ZERO) == 0)
+            if (overdraftLimit.isZero())
                 throw new IllegalArgumentException("Insufficient funds");
             throw new IllegalArgumentException("Withdrawal exceeds overdraft limit");
         }
@@ -64,17 +62,17 @@ public final class CheckingAccount extends Account {
         requireSameCurrency(amount);
         if (amount.isNegative())
             throw new IllegalArgumentException("Transfer amount cannot be negative");
-        Money totalDebit = fee.amount().compareTo(BigDecimal.ZERO) > 0 ? amount.add(fee) : amount;
+        Money totalDebit = fee.isZero() ? amount : amount.add(fee);
         Money projected = this.balance.subtract(totalDebit);
         Money lowerBound = overdraftLimit.negate();
         if (projected.amount().compareTo(lowerBound.amount()) < 0) {
-            if (overdraftLimit.amount().compareTo(BigDecimal.ZERO) == 0)
+            if (overdraftLimit.isZero())
                 throw new IllegalArgumentException("Insufficient funds for transfer including fee");
             throw new IllegalArgumentException("Transfer exceeds overdraft limit");
         }
         this.balance = projected;
         String desc = "Transfer out to account " + targetAccountId +
-                (fee.amount().compareTo(BigDecimal.ZERO) > 0 ? " (fee: " + fee + ")" : "");
+                (fee.isZero() ? "" : " (fee: " + fee + ")");
         return Transaction.create(this.id, TransactionType.TRANSFER_OUT, amount, desc);
     }
 }
