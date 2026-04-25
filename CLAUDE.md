@@ -32,7 +32,7 @@ adapter/out/persistence/ → JPA entities (DTOs), Spring Data repos, mappers, ad
 adapter/out/security/    → BCryptPasswordHasherAdapter
 application/service/     → CustomerApplicationService, AccountApplicationService
 config/                  → SecurityConfig (Spring beans), BankUserDetailsService
-domain/model/            → Entities (Customer, Account, Transaction) + value objects (records)
+domain/model/            → Entities (Customer, Account + 3 subtypes, Transaction) + value objects (records) + AccountState hierarchy
 domain/service/          → PasswordValidationService, TransferDomainService (pure Java)
 domain/port/in/          → Use-case interfaces with nested Command records
 domain/port/out/         → Repository and infrastructure interfaces
@@ -47,7 +47,7 @@ domain/port/out/         → Repository and infrastructure interfaces
 - **Three account types**: `CheckingAccount` carries an `overdraftLimit` — withdrawals may take the balance negative up to that limit. `SavingsAccount` carries an `annualInterestRate` and a `lastAccrualDate`; `accrueInterest` credits monthly interest and works on ACTIVE or FROZEN accounts (but not CLOSED). `TimeDepositAccount` locks the principal at open; `deposit` is rejected; `mature` must be called on or after the maturity date and credits the annual interest; withdrawals are then permitted.
 - **Password history**: `Customer` holds `currentPassword` + up to 3 previous hashes. Reuse checking (BCrypt) lives in `CustomerApplicationService` since it requires the `PasswordHasherPort`.
 - **Transfer fee**: free for same-customer transfers; `TransferDomainService.calculateFee()` applies the admin-configured percentage for cross-customer transfers. Fee stored in `settings` table.
-- **Account status**: `AccountStatus` enum (`ACTIVE`, `FROZEN`, `CLOSED`) is a state machine inside `Account`. All mutating operations (`deposit`, `withdraw`, `transferOut`, `transferIn`) call `requireActive()` first. Transitions: `freeze()`, `unfreeze()`, `close()` — `CLOSED` is terminal. Invalid transitions throw `IllegalStateException`; the application service converts this to `AccountNotOperableException` → HTTP 422.
+- **Account status (State pattern)**: `Account` holds an `AccountState` — a sealed interface with three stateless singleton implementations (`ActiveState`, `FrozenState`, `ClosedState`). Each state owns its valid transitions and its `requireOperable()` check; `Account.freeze()`/`unfreeze()`/`close()` are one-line delegations. The `AccountStatus` enum (`ACTIVE`, `FROZEN`, `CLOSED`) is preserved as the boundary type for persistence and REST, with `AccountState.of(status)` converting at construction time. Invalid transitions throw `IllegalStateException`; the application service converts this to `AccountNotOperableException` → HTTP 422.
 - **Authentication**: HTTP Basic Auth via Spring Security. Credentials loaded from the `customers` table by `BankUserDetailsService`. Roles: `ADMIN`, `CUSTOMER`.
 - **JPA DTOs**: `CustomerJpaEntity`, `AccountJpaEntity`, `TransactionJpaEntity`, `SettingsJpaEntity`, `PasswordHistoryJpaEntity` — none of these cross the persistence adapter boundary.
 

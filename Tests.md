@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-133 tests across 12 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+153 tests across 13 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -27,7 +27,7 @@ mvn test -Dtest=AccountControllerTest
                └──────────────────────────────────────────────┘
       ┌──────────────────────────────────────────────────────────────┐
       │                     Domain Unit Tests                        │  Pure Java
-      │                (no mocks, no Spring, no I/O)                 │  61 tests
+      │                (no mocks, no Spring, no I/O)                 │  81 tests
       └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -177,6 +177,27 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 | `shouldRejectDoubleMaturation` | Calling `mature` a second time throws `IllegalStateException` with "already matured". |
 | `shouldMatureWhenFrozen` | `mature` succeeds on a FROZEN account and credits interest; account status remains `FROZEN`. |
 | `shouldRejectMaturationOnClosedAccount` | `mature` on a CLOSED account throws `IllegalStateException`. |
+
+---
+
+### `AccountStateTest` — 20 tests
+
+**Class under test:** `domain/model/AccountState.java` and the three implementations (`ActiveState`, `FrozenState`, `ClosedState`).
+
+`AccountState` is the State pattern's polymorphic core: a sealed interface with three stateless singleton implementations, each owning the valid transitions and operability check for its state. Tests are grouped with `@Nested` per state, plus a factory and singleton-invariant group.
+
+| Group / Test | What it verifies |
+|------|-----------------|
+| `shouldMapEachAccountStatusToItsState` | `AccountState.of(ACTIVE/FROZEN/CLOSED)` returns the expected singleton. |
+| **Active** — `shouldExposeActiveStatus` | `ActiveState.status()` returns `AccountStatus.ACTIVE`. |
+| **Active** — `shouldNotBeTerminal` | `isTerminal()` returns false. |
+| **Active** — `shouldAllowOperations` | `requireOperable()` does not throw. |
+| **Active** — `shouldTransitionToFrozenOnFreeze` | `freeze()` returns `FrozenState.INSTANCE`. |
+| **Active** — `shouldRejectUnfreezeOnActive` | `unfreeze()` throws "not frozen". |
+| **Active** — `shouldTransitionToClosedOnClose` | `close()` returns `ClosedState.INSTANCE`. |
+| **Frozen** — 6 tests | Mirror of Active: status=FROZEN, not terminal, `requireOperable` throws "frozen", `freeze` throws "already frozen", `unfreeze`→Active, `close`→Closed. |
+| **Closed** — 6 tests | status=CLOSED, terminal, `requireOperable` throws "closed", all three transitions throw with "closed" / "already closed". |
+| **StatesAreSingletons** — `factoryReturnsSameInstanceForRepeatedCalls` | Repeated `AccountState.of(...)` calls return the same instance per status — confirms no allocation per lookup. |
 
 ---
 
@@ -645,6 +666,7 @@ The negative communication tests (`verifyNoInteractions`) are important here —
 | `CheckingAccountTest` | ~3 (exceptions + returned state) | ~1 (balance) | — |
 | `SavingsAccountTest` | ~5 (exceptions + returned Tx) | ~2 (balance, lastAccrualDate) | — |
 | `TimeDepositAccountTest` | ~6 (exceptions + returned Tx) | ~3 (balance, matured, status) | — |
+| `AccountStateTest` | ~6 (exceptions on invalid transitions) | ~14 (returned-state identity, status, terminal) | — |
 | `CustomerTest` | 1 | 2 | — |
 | `AccountApplicationServiceTest` | ~8 (exceptions + returned objects) | ~6 (balance, status) | 1 (only `shouldFreezeAccount`) |
 | `CustomerApplicationServiceTest` | ~3 (exceptions) | 1 | ~4 |
@@ -666,7 +688,7 @@ The negative communication tests (`verifyNoInteractions`) are important here —
 
 ## Coverage Analysis
 
-Coverage was measured with **JaCoCo 0.8.13** on Java 25, produced by `mvn verify`. The raw data comes from `target/site/jacoco/jacoco.csv`. Test classes themselves are excluded from all figures. The figures below pre-date the account-types feature (sealed `Account` hierarchy + 3 subtypes); rerun `mvn verify` to refresh.
+Coverage was measured with **JaCoCo 0.8.13** on Java 25, produced by `mvn verify`. The raw data comes from `target/site/jacoco/jacoco.csv`. Test classes themselves are excluded from all figures. The figures below pre-date the account-types feature (sealed `Account` hierarchy + 3 subtypes) and the State-pattern refactor (`AccountState` + 3 singletons); rerun `mvn verify` to refresh.
 
 ---
 
