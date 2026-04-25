@@ -1,7 +1,7 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.config;
 
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.PasswordValidationService;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.TransferDomainService;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.customer.PasswordValidationService;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.account.TransferDomainService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;

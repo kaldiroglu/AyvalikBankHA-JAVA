@@ -5,9 +5,10 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.CreateCus
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.SetTransferFeeRequest;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.CustomerResponse;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.TransactionResponse;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.AccountId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.AccountId;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

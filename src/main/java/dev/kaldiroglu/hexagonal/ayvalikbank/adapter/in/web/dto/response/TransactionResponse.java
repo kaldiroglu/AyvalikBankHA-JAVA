@@ -1,6 +1,6 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response;
 
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Transaction;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Transaction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

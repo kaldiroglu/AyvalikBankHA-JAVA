@@ -2,9 +2,9 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.mapper;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.entity.CustomerJpaEntity;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.entity.PasswordHistoryJpaEntity;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Customer;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Password;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Password;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;

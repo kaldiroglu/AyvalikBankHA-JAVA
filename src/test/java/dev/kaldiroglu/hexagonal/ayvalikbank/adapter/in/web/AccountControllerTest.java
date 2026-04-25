@@ -4,8 +4,10 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoun
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;

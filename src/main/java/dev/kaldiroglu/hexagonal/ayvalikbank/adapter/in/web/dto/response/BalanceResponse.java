@@ -1,6 +1,6 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response;
 
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Money;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Money;
 
 import java.math.BigDecimal;
 

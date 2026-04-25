@@ -2,7 +2,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.entity.SettingsJpaEntity;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.repository.SettingsJpaRepository;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.SettingsRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepositoryPort;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;

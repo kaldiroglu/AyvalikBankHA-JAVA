@@ -1,10 +1,10 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.config;
 
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Customer;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Password;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.CustomerRepositoryPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.PasswordHasherPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Password;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.PasswordHasherPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;

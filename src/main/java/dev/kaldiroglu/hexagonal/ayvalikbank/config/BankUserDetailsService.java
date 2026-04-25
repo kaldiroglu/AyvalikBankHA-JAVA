@@ -1,6 +1,6 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.config;
 
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.CustomerRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;

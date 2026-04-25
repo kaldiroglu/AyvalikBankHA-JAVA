@@ -2,9 +2,9 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.mapper.CustomerPersistenceMapper;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.repository.CustomerJpaRepository;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Customer;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.CustomerRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

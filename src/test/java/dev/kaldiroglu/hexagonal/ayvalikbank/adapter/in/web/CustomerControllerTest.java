@@ -5,7 +5,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidPasswor
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReusedException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.ChangePasswordUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.ChangePasswordUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;

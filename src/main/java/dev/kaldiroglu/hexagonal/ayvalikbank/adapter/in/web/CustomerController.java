@@ -1,8 +1,8 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.ChangePasswordRequest;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.ChangePasswordUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.ChangePasswordUseCase;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

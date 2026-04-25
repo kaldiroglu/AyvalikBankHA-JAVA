@@ -4,13 +4,15 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoun
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.AccountRepositoryPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.CustomerRepositoryPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.SettingsRepositoryPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.TransactionRepositoryPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.TransferDomainService;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.AccountRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.TransactionRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.account.TransferDomainService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

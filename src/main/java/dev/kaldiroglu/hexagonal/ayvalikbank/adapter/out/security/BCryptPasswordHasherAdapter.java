@@ -1,6 +1,6 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.security;
 
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.PasswordHasherPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.PasswordHasherPort;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 

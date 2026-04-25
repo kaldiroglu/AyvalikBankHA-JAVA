@@ -3,13 +3,15 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidPasswordException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReusedException;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Customer;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Password;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.CustomerRepositoryPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.PasswordHasherPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.PasswordValidationService;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Password;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.PasswordHasherPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.customer.PasswordValidationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +29,12 @@ public class CustomerApplicationService implements
     private final CustomerRepositoryPort customerRepository;
     private final PasswordHasherPort passwordHasher;
     private final PasswordValidationService passwordValidationService;
-    private final dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.SettingsRepositoryPort settingsRepository;
+    private final SettingsRepositoryPort settingsRepository;
 
     public CustomerApplicationService(CustomerRepositoryPort customerRepository,
                                       PasswordHasherPort passwordHasher,
                                       PasswordValidationService passwordValidationService,
-                                      dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.SettingsRepositoryPort settingsRepository) {
+                                      SettingsRepositoryPort settingsRepository) {
         this.customerRepository = customerRepository;
         this.passwordHasher = passwordHasher;
         this.passwordValidationService = passwordValidationService;

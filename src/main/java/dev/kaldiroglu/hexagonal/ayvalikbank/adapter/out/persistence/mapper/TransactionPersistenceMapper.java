@@ -1,7 +1,8 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.mapper;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.entity.TransactionJpaEntity;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
 import org.springframework.stereotype.Component;
 
 @Component
