@@ -73,7 +73,7 @@ public final class SavingsAccount extends Account {
     }
 
     public Transaction accrueInterest(YearMonth month) {
-        if (status == AccountStatus.CLOSED)
+        if (state.isTerminal())
             throw new IllegalStateException("Cannot accrue interest on a closed account");
         LocalDate firstOfNextMonth = month.plusMonths(1).atDay(1);
         if (lastAccrualDate != null && !firstOfNextMonth.isAfter(lastAccrualDate))

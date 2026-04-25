@@ -7,7 +7,7 @@ public sealed abstract class Account
     protected final CustomerId ownerId;
     protected final Currency currency;
     protected Money balance;
-    protected AccountStatus status;
+    protected AccountState state;
 
     protected Account(AccountId id, CustomerId ownerId, Currency currency, Money balance, AccountStatus status) {
         if (!balance.currency().equals(currency))
@@ -16,34 +16,18 @@ public sealed abstract class Account
         this.ownerId = ownerId;
         this.currency = currency;
         this.balance = balance;
-        this.status = status;
+        this.state = AccountState.of(status);
     }
 
     public abstract AccountType type();
 
-    // ── Status transitions (shared, final) ────────────────────────────────
+    // ── Status transitions (delegated to the State) ───────────────────────
 
-    public final void freeze() {
-        if (status == AccountStatus.CLOSED)
-            throw new IllegalStateException("Cannot freeze a closed account");
-        if (status == AccountStatus.FROZEN)
-            throw new IllegalStateException("Account is already frozen");
-        this.status = AccountStatus.FROZEN;
-    }
+    public final void freeze() { this.state = state.freeze(); }
 
-    public final void unfreeze() {
-        if (status == AccountStatus.CLOSED)
-            throw new IllegalStateException("Cannot unfreeze a closed account");
-        if (status == AccountStatus.ACTIVE)
-            throw new IllegalStateException("Account is not frozen");
-        this.status = AccountStatus.ACTIVE;
-    }
+    public final void unfreeze() { this.state = state.unfreeze(); }
 
-    public final void close() {
-        if (status == AccountStatus.CLOSED)
-            throw new IllegalStateException("Account is already closed");
-        this.status = AccountStatus.CLOSED;
-    }
+    public final void close() { this.state = state.close(); }
 
     // ── Operations: each subtype overrides ────────────────────────────────
 
@@ -62,12 +46,7 @@ public sealed abstract class Account
 
     // ── Guards (visible to subclasses) ────────────────────────────────────
 
-    protected final void requireActive() {
-        if (status == AccountStatus.FROZEN)
-            throw new IllegalStateException("Account is frozen");
-        if (status == AccountStatus.CLOSED)
-            throw new IllegalStateException("Account is closed");
-    }
+    protected final void requireActive() { state.requireOperable(); }
 
     protected final void requireSameCurrency(Money amount) {
         if (!amount.currency().equals(this.currency))
@@ -80,5 +59,6 @@ public sealed abstract class Account
     public CustomerId getOwnerId() { return ownerId; }
     public Currency getCurrency() { return currency; }
     public Money getBalance() { return balance; }
-    public AccountStatus getStatus() { return status; }
+    public AccountStatus getStatus() { return state.status(); }
+    public AccountState getState() { return state; }
 }

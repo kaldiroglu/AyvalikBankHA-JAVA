@@ -79,7 +79,7 @@ public final class TimeDepositAccount extends Account {
 
     public Transaction mature(LocalDate today) {
         // FROZEN accounts can still mature: maturation is a date-driven system action.
-        if (status == AccountStatus.CLOSED)
+        if (state.isTerminal())
             throw new IllegalStateException("Cannot mature a closed account");
         if (matured)
             throw new IllegalStateException("Account is already matured");
