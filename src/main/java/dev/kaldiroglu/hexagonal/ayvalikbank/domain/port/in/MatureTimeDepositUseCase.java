@@ -4,5 +4,6 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.AccountId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.Transaction;
 
 public interface MatureTimeDepositUseCase {
-    Transaction mature(AccountId accountId);
+    record Command(AccountId accountId) {}
+    Transaction mature(Command command);
 }

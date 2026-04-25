@@ -15,6 +15,8 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,7 +32,9 @@ class AccountControllerTest {
     @Autowired MockMvc mockMvc;
 
     @MockitoBean BankUserDetailsService userDetailsService;
-    @MockitoBean CreateAccountUseCase createAccount;
+    @MockitoBean OpenCheckingAccountUseCase openChecking;
+    @MockitoBean OpenSavingsAccountUseCase openSavings;
+    @MockitoBean OpenTimeDepositAccountUseCase openTimeDeposit;
     @MockitoBean DepositMoneyUseCase depositMoney;
     @MockitoBean WithdrawMoneyUseCase withdrawMoney;
     @MockitoBean GetBalanceUseCase getBalance;
@@ -49,48 +53,94 @@ class AccountControllerTest {
                 Money.of(100.0, Currency.USD), "Deposit");
     }
 
-    // ── POST /api/accounts ────────────────────────────────────────────────
+    // ── POST /api/accounts/checking ───────────────────────────────────────
 
     @Test
     @WithMockUser(roles = "CUSTOMER")
-    void createAccount_returnsCreated() throws Exception {
+    void openChecking_returnsCreated() throws Exception {
         CustomerId ownerId = CustomerId.generate();
-        Account account = usdAccount(ownerId);
-        when(createAccount.createAccount(any())).thenReturn(account);
+        CheckingAccount account = CheckingAccount.open(ownerId, Currency.USD);
+        when(openChecking.openChecking(any())).thenReturn(account);
 
-        mockMvc.perform(post("/api/accounts")
+        mockMvc.perform(post("/api/accounts/checking")
                         .param("ownerId", ownerId.value().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"currency":"USD"}
+                                {"currency":"USD","overdraftLimit":0}
                                 """))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("CHECKING"))
                 .andExpect(jsonPath("$.currency").value("USD"))
-                .andExpect(jsonPath("$.balance").value(0));
+                .andExpect(jsonPath("$.overdraftLimit").value(0));
     }
 
     @Test
     @WithMockUser(roles = "CUSTOMER")
-    void createAccount_returnsBadRequestOnMissingCurrency() throws Exception {
-        mockMvc.perform(post("/api/accounts")
+    void openChecking_returnsBadRequestOnMissingCurrency() throws Exception {
+        mockMvc.perform(post("/api/accounts/checking")
                         .param("ownerId", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(createAccount);
+        verifyNoInteractions(openChecking);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void createAccount_returnsForbiddenForAdminRole() throws Exception {
-        mockMvc.perform(post("/api/accounts")
+    void openChecking_returnsForbiddenForAdminRole() throws Exception {
+        mockMvc.perform(post("/api/accounts/checking")
                         .param("ownerId", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"currency":"USD"}
                                 """))
                 .andExpect(status().isForbidden());
+    }
+
+    // ── POST /api/accounts/savings ────────────────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
+    void openSavings_returnsCreated() throws Exception {
+        CustomerId ownerId = CustomerId.generate();
+        SavingsAccount account = SavingsAccount.open(ownerId, Currency.EUR, new BigDecimal("0.03"));
+        when(openSavings.openSavings(any())).thenReturn(account);
+
+        mockMvc.perform(post("/api/accounts/savings")
+                        .param("ownerId", ownerId.value().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currency":"EUR","annualInterestRate":0.03}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("SAVINGS"))
+                .andExpect(jsonPath("$.interestRate").value(0.03));
+    }
+
+    // ── POST /api/accounts/time-deposit ───────────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "CUSTOMER")
+    void openTimeDeposit_returnsCreated() throws Exception {
+        CustomerId ownerId = CustomerId.generate();
+        TimeDepositAccount account = TimeDepositAccount.open(
+                ownerId, Currency.USD,
+                Money.of(1000.0, Currency.USD),
+                LocalDate.now(),
+                LocalDate.now().plusYears(1),
+                new BigDecimal("0.05"));
+        when(openTimeDeposit.openTimeDeposit(any())).thenReturn(account);
+
+        mockMvc.perform(post("/api/accounts/time-deposit")
+                        .param("ownerId", ownerId.value().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currency":"USD","principal":1000,"maturityDate":"%s","annualInterestRate":0.05}
+                                """.formatted(LocalDate.now().plusYears(1))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("TIME_DEPOSIT"))
+                .andExpect(jsonPath("$.principal").value(1000));
     }
 
     // ── GET /api/customers/{id}/accounts ─────────────────────────────────

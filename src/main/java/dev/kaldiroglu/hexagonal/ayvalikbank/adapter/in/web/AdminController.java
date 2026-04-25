@@ -105,7 +105,7 @@ public class AdminController {
 
     @PutMapping("/accounts/{accountId}/mature")
     public ResponseEntity<TransactionResponse> matureTimeDeposit(@PathVariable String accountId) {
-        var tx = matureTimeDeposit.mature(AccountId.of(accountId));
+        var tx = matureTimeDeposit.mature(new MatureTimeDepositUseCase.Command(AccountId.of(accountId)));
         return ResponseEntity.ok(TransactionResponse.from(tx));
     }
 }

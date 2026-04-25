@@ -3,10 +3,14 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.AccountStatus;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.CreateAccountUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.AccrueInterestUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.DepositMoneyUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.MatureTimeDepositUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.OpenCheckingAccountUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.OpenSavingsAccountUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.OpenTimeDepositAccountUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.TransferMoneyUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.WithdrawMoneyUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.AccountRepositoryPort;
@@ -21,6 +25,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
@@ -45,28 +51,60 @@ class AccountApplicationServiceTest {
                 new TransferDomainService());
     }
 
+    // ── open* ─────────────────────────────────────────────────────────────
+
     @Test
-    void shouldCreateAccountForExistingCustomer() {
+    void shouldOpenCheckingAccountForExistingCustomer() {
         CustomerId ownerId = CustomerId.generate();
         when(customerRepository.existsById(ownerId)).thenReturn(true);
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Account account = service.createAccount(new CreateAccountUseCase.Command(ownerId, Currency.USD));
+        CheckingAccount account = service.openChecking(new OpenCheckingAccountUseCase.Command(
+                ownerId, Currency.USD, Money.of(100.0, Currency.USD)));
 
+        assertThat(account.type()).isEqualTo(AccountType.CHECKING);
         assertThat(account.getCurrency()).isEqualTo(Currency.USD);
-        assertThat(account.getOwnerId()).isEqualTo(ownerId);
-        assertThat(account.getBalance()).isEqualTo(Money.zero(Currency.USD));
+        assertThat(account.getOverdraftLimit().amount()).isEqualByComparingTo("100.00");
     }
 
     @Test
-    void shouldThrowCustomerNotFoundWhenOwnerMissing() {
+    void shouldOpenSavingsAccountForExistingCustomer() {
+        CustomerId ownerId = CustomerId.generate();
+        when(customerRepository.existsById(ownerId)).thenReturn(true);
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        SavingsAccount account = service.openSavings(new OpenSavingsAccountUseCase.Command(
+                ownerId, Currency.EUR, new BigDecimal("0.03")));
+
+        assertThat(account.type()).isEqualTo(AccountType.SAVINGS);
+        assertThat(account.getAnnualInterestRate()).isEqualByComparingTo("0.03");
+    }
+
+    @Test
+    void shouldOpenTimeDepositAccountForExistingCustomer() {
+        CustomerId ownerId = CustomerId.generate();
+        when(customerRepository.existsById(ownerId)).thenReturn(true);
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        TimeDepositAccount account = service.openTimeDeposit(new OpenTimeDepositAccountUseCase.Command(
+                ownerId, Currency.USD, Money.of(1000.0, Currency.USD),
+                LocalDate.now().plusYears(1), new BigDecimal("0.05")));
+
+        assertThat(account.type()).isEqualTo(AccountType.TIME_DEPOSIT);
+        assertThat(account.getBalance().amount()).isEqualByComparingTo("1000.00");
+    }
+
+    @Test
+    void shouldThrowCustomerNotFoundWhenOpeningCheckingForMissingOwner() {
         CustomerId ownerId = CustomerId.generate();
         when(customerRepository.existsById(ownerId)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.createAccount(
-                new CreateAccountUseCase.Command(ownerId, Currency.EUR)))
+        assertThatThrownBy(() -> service.openChecking(new OpenCheckingAccountUseCase.Command(
+                ownerId, Currency.EUR, Money.zero(Currency.EUR))))
                 .isInstanceOf(CustomerNotFoundException.class);
     }
+
+    // ── deposit / withdraw / transfer ─────────────────────────────────────
 
     @Test
     void shouldDepositMoneyToAccount() {
@@ -207,5 +245,67 @@ class AccountApplicationServiceTest {
                 new WithdrawMoneyUseCase.Command(account.getId(), Money.of(500.0, Currency.USD))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Insufficient");
+    }
+
+    // ── accrue interest / mature ──────────────────────────────────────────
+
+    @Test
+    void shouldAccrueInterestOnSavingsAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        SavingsAccount account = SavingsAccount.open(ownerId, Currency.USD, new BigDecimal("0.12"));
+        account.deposit(Money.of(1000.0, Currency.USD));
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Transaction tx = service.accrueInterest(new AccrueInterestUseCase.Command(
+                account.getId(), YearMonth.of(2026, 4)));
+
+        assertThat(tx.getType()).isEqualTo(TransactionType.INTEREST);
+        assertThat(tx.getAmount().amount()).isEqualByComparingTo("10.00");
+    }
+
+    @Test
+    void shouldRejectAccrueInterestOnNonSavingsAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        CheckingAccount account = CheckingAccount.open(ownerId, Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.accrueInterest(new AccrueInterestUseCase.Command(
+                account.getId(), YearMonth.of(2026, 4))))
+                .isInstanceOf(InvalidAccountOperationException.class)
+                .hasMessageContaining("not a savings");
+    }
+
+    @Test
+    void shouldMatureTimeDepositOnOrAfterMaturityDate() {
+        CustomerId ownerId = CustomerId.generate();
+        // Open a deposit that matured yesterday so LocalDate.now() in the service is past maturity.
+        LocalDate openedOn = LocalDate.now().minusYears(1).minusDays(1);
+        LocalDate maturityDate = LocalDate.now().minusDays(1);
+        TimeDepositAccount account = new TimeDepositAccount(
+                AccountId.generate(), ownerId, Currency.USD,
+                Money.of(1000.0, Currency.USD), AccountStatus.ACTIVE,
+                Money.of(1000.0, Currency.USD), openedOn, maturityDate,
+                new BigDecimal("0.05"), false);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Transaction tx = service.mature(new MatureTimeDepositUseCase.Command(account.getId()));
+
+        assertThat(tx.getType()).isEqualTo(TransactionType.INTEREST);
+        assertThat(account.isMatured()).isTrue();
+    }
+
+    @Test
+    void shouldRejectMatureOnNonTimeDepositAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        CheckingAccount account = CheckingAccount.open(ownerId, Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.mature(new MatureTimeDepositUseCase.Command(account.getId())))
+                .isInstanceOf(InvalidAccountOperationException.class)
+                .hasMessageContaining("not a time deposit");
     }
 }

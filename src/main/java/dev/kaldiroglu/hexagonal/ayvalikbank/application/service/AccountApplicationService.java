@@ -57,8 +57,7 @@ public class AccountApplicationService implements
     @Override
     public CheckingAccount openChecking(OpenCheckingAccountUseCase.Command command) {
         requireCustomerExists(command.ownerId());
-        Money limit = command.overdraftLimit() == null ? Money.zero(command.currency()) : command.overdraftLimit();
-        CheckingAccount account = CheckingAccount.open(command.ownerId(), command.currency(), limit);
+        CheckingAccount account = CheckingAccount.open(command.ownerId(), command.currency(), command.overdraftLimit());
         return (CheckingAccount) accountRepository.save(account);
     }
 
@@ -184,8 +183,8 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public Transaction mature(AccountId accountId) {
-        Account account = findAccountOrThrow(accountId);
+    public Transaction mature(MatureTimeDepositUseCase.Command command) {
+        Account account = findAccountOrThrow(command.accountId());
         if (!(account instanceof TimeDepositAccount td))
             throw new InvalidAccountOperationException("Account is not a time deposit");
         Transaction tx;
