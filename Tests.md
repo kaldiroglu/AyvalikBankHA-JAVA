@@ -23,11 +23,11 @@ mvn test -Dtest=AccountControllerTest
                        └────────────────────────────┘
                ┌──────────────────────────────────────────────┐
                │          Application Service Tests           │  Mockito only
-               │    (mocked ports, real domain objects)       │  31 tests
+               │    (mocked ports, real domain objects)       │  29 tests
                └──────────────────────────────────────────────┘
       ┌──────────────────────────────────────────────────────────────┐
       │                     Domain Unit Tests                        │  Pure Java
-      │                (no mocks, no Spring, no I/O)                 │  93 tests
+      │                (no mocks, no Spring, no I/O)                 │  96 tests
       └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -113,17 +113,20 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 
 ---
 
-### `CustomerTest` — 3 tests
+### `CustomerTest` — 6 tests
 
 **Class under test:** `domain/model/customer/Customer.java` (entity)
 
-`Customer` tracks the current password and up to 3 previous password hashes. The password history is managed entirely inside the entity's `changePassword` method.
+`Customer` tracks the current password and up to 3 previous password hashes, plus a `CustomerTier`. The password history is managed entirely inside the entity's `changePassword` method.
 
 | Test | What it verifies |
 |------|-----------------|
 | `shouldChangePasswordAndMoveCurrentToHistory` | After one `changePassword`, the new hash is current and the old hash is in `passwordHistory[0]`. |
 | `shouldKeepAtMostThreePasswordsInHistory` | After 5 password changes starting from "hash-0", only hashes 1–3 remain in history (hash-0 is evicted). Current is hash-4. |
 | `getAllPasswordsForReuseCheckShouldIncludeCurrentAndHistory` | After two changes, `getAllPasswordsForReuseCheck()` returns 3 entries (current + 2 history) with the most recent first. |
+| `shouldDefaultToStandardTier` | `Customer.create(...)` produces a customer with `tier == STANDARD`. |
+| `shouldChangeTier` | `changeTier(PREMIUM)` then `changeTier(PRIVATE)` advances through both transitions. |
+| `shouldRejectNullTier` | `changeTier(null)` throws `IllegalArgumentException`. |
 
 ---
 
@@ -259,7 +262,7 @@ These tests cover the orchestration layer. All repository and infrastructure por
 
 ---
 
-### `CustomerApplicationServiceTest` — 6 tests
+### `CustomerApplicationServiceTest` — 8 tests
 
 **Class under test:** `application/service/CustomerApplicationService.java`
 
@@ -274,10 +277,12 @@ These tests cover the orchestration layer. All repository and infrastructure por
 | `shouldThrowCustomerNotFoundOnDeleteOfMissingCustomer` | `deleteCustomer` throws `CustomerNotFoundException` when `existsById` returns false. |
 | `shouldChangePasswordSuccessfully` | `changePassword` validates format, loads the customer, checks that the new hash does not match the old one, hashes it, calls `customer.changePassword(...)`, and saves. |
 | `shouldThrowPasswordReusedExceptionWhenNewPasswordMatchesCurrent` | `changePassword` throws `PasswordReusedException` when BCrypt confirms the new password matches the current hash. |
+| `shouldChangeCustomerTier` | `changeCustomerTier(PREMIUM)` loads the customer, calls `customer.changeTier(...)`, saves; the in-memory tier is now `PREMIUM`. |
+| `shouldThrowCustomerNotFoundOnChangeTierForMissingCustomer` | `changeCustomerTier` throws `CustomerNotFoundException` when `findById` returns empty. |
 
 ---
 
-### `AccountApplicationServiceTest` — 18 tests
+### `AccountApplicationServiceTest` — 21 tests
 
 **Class under test:** `application/service/AccountApplicationService.java`
 
@@ -322,6 +327,14 @@ These tests cover the orchestration layer. All repository and infrastructure por
 | `shouldMatureTimeDepositOnOrAfterMaturityDate` | `matureTimeDeposit` loads a `TimeDepositAccount`, delegates to `account.mature(date)`, saves the account, saves the transaction, and returns the `INTEREST` transaction. |
 | `shouldRejectMatureOnNonTimeDepositAccount` | `matureTimeDeposit` called with a non-`TimeDepositAccount` throws `AccountNotOperableException`. |
 
+#### Customer-tier-aware fee and limits
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldHalveFeeForPremiumSourceCustomer` | When the source owner is `PREMIUM`, the cross-customer transfer fee is halved (1% × 0.5 multiplier × 200 = 1.00 fee, source debited 201.00). |
+| `shouldRejectTransferAboveStandardCap` | A 5001 USD transfer for a `STANDARD` source customer throws `LimitExceededException` (the cap is 5000). |
+| `shouldRejectWithdrawAboveStandardCap` | A 5001 USD withdrawal on an account whose owner is `STANDARD` throws `LimitExceededException`. |
+
 ---
 
 ## Controller Tests (Web Layer)
@@ -337,7 +350,7 @@ No real application service or database is involved. The goal is to verify:
 
 ---
 
-### `AdminControllerTest` — 22 tests
+### `AdminControllerTest` — 25 tests
 
 **Controller:** `adapter/in/web/AdminController.java` (`/api/admin/**`)
 **Required role:** `ROLE_ADMIN`
@@ -365,6 +378,14 @@ No real application service or database is involved. The goal is to verify:
 |------|-----------------|
 | `listCustomers_returnsOkWithList` | Use case returns two customers → 200, array of length 2, correct emails. |
 | `listCustomers_returnsEmptyList` | Use case returns empty list → 200, empty array. |
+
+#### `PUT /api/admin/customers/{id}/tier`
+
+| Test | What it verifies |
+|------|-----------------|
+| `changeCustomerTier_returnsOk` | Valid body `{"tier":"PREMIUM"}` → 200; verifies the use case was called once. |
+| `changeCustomerTier_returnsBadRequestOnMissingTier` | Empty body `{}` → 400 (Jakarta `@NotNull` constraint); use case is never called. |
+| `changeCustomerTier_returnsForbiddenForCustomerRole` | `ROLE_CUSTOMER` → 403. |
 
 #### `PUT /api/admin/settings/transfer-fee`
 
