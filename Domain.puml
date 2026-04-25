@@ -262,28 +262,49 @@ package "domain.model.customer" {
         + {static} Password ofHashed(String)
     }
 
+    enum CustomerTier {
+        STANDARD
+        PREMIUM
+        PRIVATE
+        --
+        + BigDecimal feeMultiplier()
+        + Optional<BigDecimal> maxPerTransfer()
+        + Optional<BigDecimal> maxPerWithdrawal()
+    }
+
+    note right of CustomerTier
+      Per-tier policy:
+        STANDARD: 1.0× fee, 5k transfer, 5k withdrawal
+        PREMIUM:  0.5× fee, 50k transfer, 25k withdrawal
+        PRIVATE:  0.0× fee, unlimited
+    end note
+
     class Customer <<entity>> {
         - CustomerId id
         - String name
         - String email
         - String role
+        - CustomerTier tier
         - Password currentPassword
         - List<Password> passwordHistory
         --
         + {static} Customer create(String, String, Password)
         + void changePassword(Password)
+        + void changeTier(CustomerTier)
         + List<Password> getAllPasswordsForReuseCheck()
         + CustomerId getId()
         + String getName()
         + String getEmail()
         + String getRole()
+        + CustomerTier getTier()
         + Password getCurrentPassword()
         + List<Password> getPasswordHistory()
     }
 
-    Customer "1" *-- "1"    CustomerId : id
-    Customer "1" *-- "1"    Password   : currentPassword
-    Customer "1" *-- "0..3" Password   : passwordHistory
+    Customer "1" *-- "1"    CustomerId   : id
+    Customer "1" *-- "1"    CustomerTier : tier
+    Customer "1" *-- "1"    Password     : currentPassword
+    Customer "1" *-- "0..3" Password     : passwordHistory
 }
 
 ' Cross-aggregate reference: Account holds an ownerId (CustomerId)
@@ -295,7 +316,9 @@ Account ..> CustomerId : "ownerId"
 package "domain.service.account" {
 
     class TransferDomainService <<service>> {
-        + Money calculateFee(Money, boolean, BigDecimal)
+        + Money calculateFee(Money, boolean, BigDecimal, CustomerTier)
+        + void requireTransferWithinLimit(Money, CustomerTier)
+        + void requireWithdrawalWithinLimit(Money, CustomerTier)
     }
 }
 
@@ -342,6 +365,15 @@ package "domain.port.in.customer" {
         + String rawNewPassword
     }
     ChangePasswordUseCase +-- ChangePasswordCommand
+
+    interface ChangeCustomerTierUseCase {
+        + void changeCustomerTier(Command)
+    }
+    class ChangeCustomerTierCommand <<record>> {
+        + CustomerId customerId
+        + CustomerTier tier
+    }
+    ChangeCustomerTierUseCase +-- ChangeCustomerTierCommand
 }
 
 ' ─────────────────────────────────────────

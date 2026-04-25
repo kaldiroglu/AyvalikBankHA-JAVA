@@ -34,7 +34,7 @@ The heart of the application. **No Spring, no JPA, no BCrypt** — plain Java on
 
 **Entities — account aggregate** (`domain/model/account/`): `Account` (sealed hierarchy — see below), `CheckingAccount`, `SavingsAccount`, `TimeDepositAccount`, `Transaction`
 
-**Entities — customer aggregate** (`domain/model/customer/`): `Customer`
+**Entities — customer aggregate** (`domain/model/customer/`): `Customer` (carries a `CustomerTier` — `STANDARD` / `PREMIUM` / `PRIVATE`)
 
 These are *rich* objects. `Account` owns its own invariants:
 ```java
@@ -58,11 +58,11 @@ Immutable and self-validating. `Money` permits negative amounts (required to rep
 
 **Domain Services:**
 - `domain/service/customer/PasswordValidationService` — enforces 8-16 char, upper/lower/digit/special rules
-- `domain/service/account/TransferDomainService` — computes fees (0% same customer, configurable % cross-customer)
+- `domain/service/account/TransferDomainService` — computes fees (0% same customer; cross-customer fee = admin's % × source customer's tier multiplier) and validates per-transaction transfer / withdrawal caps from the tier
 
 **Ports In:**
 - `domain/port/in/account/` — 15 account use cases: `OpenCheckingAccountUseCase`, `OpenSavingsAccountUseCase`, `OpenTimeDepositAccountUseCase`, `DepositMoneyUseCase`, `WithdrawMoneyUseCase`, `TransferMoneyUseCase`, `GetBalanceUseCase`, `GetTransactionsUseCase`, `ListAccountsUseCase`, `FreezeAccountUseCase`, `UnfreezeAccountUseCase`, `CloseAccountUseCase`, `AccrueInterestUseCase`, `MatureTimeDepositUseCase`, `SetTransferFeeUseCase`
-- `domain/port/in/customer/` — 4 customer use cases: `CreateCustomerUseCase`, `DeleteCustomerUseCase`, `ListCustomersUseCase`, `ChangePasswordUseCase`
+- `domain/port/in/customer/` — 5 customer use cases: `CreateCustomerUseCase`, `DeleteCustomerUseCase`, `ListCustomersUseCase`, `ChangePasswordUseCase`, `ChangeCustomerTierUseCase`
 
 Each use case carries a nested `Command` record for its input (or takes a typed ID directly for simple operations).
 
@@ -144,3 +144,4 @@ REST controllers that translate HTTP ↔ use-case commands:
 | Nested `Command` records in use-case interfaces | Self-documenting, no separate command classes needed |
 | `AccountStatus` state machine in `Account` entity | Status transitions and operation guards live in the domain where the rules belong; the application service only translates `IllegalStateException` → `AccountNotOperableException` |
 | State pattern (`AccountState` + 3 singletons) for status | Replaces a chain of `if (status == ...)` conditionals with polymorphic dispatch; each state class owns the rules for its own transitions, so adding a future state requires no changes to existing states or to `Account` |
+| `CustomerTier` policy data on the enum, enforcement in `TransferDomainService` | Tier multipliers and per-transaction caps live on `CustomerTier` itself (one place to add a new tier). `Account` knows nothing about tiers — `AccountApplicationService` fetches the source `Customer` and passes the tier to the domain service for fee calculation and limit enforcement |

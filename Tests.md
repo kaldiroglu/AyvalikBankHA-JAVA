@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-153 tests across 13 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+176 tests across 15 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -19,15 +19,15 @@ mvn test -Dtest=AccountControllerTest
 ```
                        ┌────────────────────────────┐
                        │     Controller Tests       │  @WebMvcTest
-                       │ (MockMvc, mocked use cases)│  48 tests
+                       │ (MockMvc, mocked use cases)│  51 tests
                        └────────────────────────────┘
                ┌──────────────────────────────────────────────┐
                │          Application Service Tests           │  Mockito only
-               │    (mocked ports, real domain objects)       │  24 tests
+               │    (mocked ports, real domain objects)       │  31 tests
                └──────────────────────────────────────────────┘
       ┌──────────────────────────────────────────────────────────────┐
       │                     Domain Unit Tests                        │  Pure Java
-      │                (no mocks, no Spring, no I/O)                 │  81 tests
+      │                (no mocks, no Spring, no I/O)                 │  93 tests
       └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -198,6 +198,40 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 | **Frozen** — 6 tests | Mirror of Active: status=FROZEN, not terminal, `requireOperable` throws "frozen", `freeze` throws "already frozen", `unfreeze`→Active, `close`→Closed. |
 | **Closed** — 6 tests | status=CLOSED, terminal, `requireOperable` throws "closed", all three transitions throw with "closed" / "already closed". |
 | **StatesAreSingletons** — `factoryReturnsSameInstanceForRepeatedCalls` | Repeated `AccountState.of(...)` calls return the same instance per status — confirms no allocation per lookup. |
+
+---
+
+### `CustomerTierTest` — 3 tests
+
+**Class under test:** `domain/model/customer/CustomerTier.java` (enum with policy data)
+
+`CustomerTier` carries the per-tier policy bundle: a fee multiplier (`BigDecimal`) that scales the admin's transfer-fee percent, and two `Optional<BigDecimal>` per-transaction caps (one for transfers, one for withdrawals; `Optional.empty()` for unlimited).
+
+| Test | What it verifies |
+|------|-----------------|
+| `standardHasFullFeeAndModestCaps` | `STANDARD.feeMultiplier()` is 1.00; both caps are 5,000. |
+| `premiumHalvesFeeAndRaisesCaps` | `PREMIUM.feeMultiplier()` is 0.50; transfer cap 50,000, withdrawal cap 25,000. |
+| `privateIsFreeAndUnlimited` | `PRIVATE.feeMultiplier()` is 0.00; both caps are `Optional.empty()`. |
+
+---
+
+### `TransferDomainServiceTest` — 9 tests
+
+**Class under test:** `domain/service/account/TransferDomainService.java` (domain service)
+
+`TransferDomainService` calculates fees and validates per-transaction limits. Tests are pure Java — no Spring, no mocks. Same-customer transfers are always free regardless of tier.
+
+| Test | What it verifies |
+|------|-----------------|
+| `sameCustomerTransferIsFreeRegardlessOfTier` | Same-customer flag short-circuits to zero fee. |
+| `standardTierPaysFullFee` | At 1% admin setting, STANDARD pays the full 1% (10.00 on 1000.00). |
+| `premiumTierPaysHalfFee` | PREMIUM pays half (5.00 on 1000.00). |
+| `privateTierPaysNoFee` | PRIVATE pays nothing. |
+| `rejectsTransferAboveStandardCap` | 5001 USD on STANDARD throws `IllegalStateException` mentioning the tier and limit. |
+| `allowsTransferAtExactlyTheCap` | Exactly 5000 USD passes (boundary inclusive). |
+| `privateTierTransferIsUnlimited` | 1,000,000 USD on PRIVATE passes. |
+| `rejectsWithdrawalAbovePremiumCap` | 25,001 USD on PREMIUM throws. |
+| `privateTierWithdrawalIsUnlimited` | Same as transfer for withdrawals. |
 
 ---
 
@@ -667,7 +701,9 @@ The negative communication tests (`verifyNoInteractions`) are important here —
 | `SavingsAccountTest` | ~5 (exceptions + returned Tx) | ~2 (balance, lastAccrualDate) | — |
 | `TimeDepositAccountTest` | ~6 (exceptions + returned Tx) | ~3 (balance, matured, status) | — |
 | `AccountStateTest` | ~6 (exceptions on invalid transitions) | ~14 (returned-state identity, status, terminal) | — |
-| `CustomerTest` | 1 | 2 | — |
+| `CustomerTierTest` | — | 3 (multiplier + caps per tier) | — |
+| `TransferDomainServiceTest` | ~3 (limit-exceeded exceptions) | ~6 (returned fees, allowed limits) | — |
+| `CustomerTest` | 2 (null tier, default tier) | 4 (password history + tier change) | — |
 | `AccountApplicationServiceTest` | ~8 (exceptions + returned objects) | ~6 (balance, status) | 1 (only `shouldFreezeAccount`) |
 | `CustomerApplicationServiceTest` | ~3 (exceptions) | 1 | ~4 |
 | `AccountControllerTest` | ~17 (HTTP status + JSON) | — | ~5 (verify / verifyNoInteractions) |

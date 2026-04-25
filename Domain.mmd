@@ -15,17 +15,30 @@ classDiagram
         -String name
         -String email
         -String role
+        -CustomerTier tier
         -Password currentPassword
         -List~Password~ passwordHistory
         +create(name, email, password) Customer$
         +changePassword(newPassword) void
+        +changeTier(newTier) void
         +getAllPasswordsForReuseCheck() List~Password~
         +getId() CustomerId
         +getName() String
         +getEmail() String
         +getRole() String
+        +getTier() CustomerTier
         +getCurrentPassword() Password
         +getPasswordHistory() List~Password~
+    }
+
+    class CustomerTier {
+        <<enum>>
+        STANDARD
+        PREMIUM
+        PRIVATE
+        +feeMultiplier() BigDecimal
+        +maxPerTransfer() Optional~BigDecimal~
+        +maxPerWithdrawal() Optional~BigDecimal~
     }
 
     class Account {
@@ -248,10 +261,13 @@ classDiagram
 
     class TransferDomainService {
         <<service>>
-        +calculateFee(amount, sameCustomer, feePercent) Money
+        +calculateFee(amount, sameCustomer, feePercent, sourceTier) Money
+        +requireTransferWithinLimit(amount, tier) void
+        +requireWithdrawalWithinLimit(amount, tier) void
     }
 
     TransferDomainService ..> Money : returns
+    TransferDomainService ..> CustomerTier : "uses"
     PasswordValidationService ..> IllegalArgumentException : throws
 
 
@@ -296,6 +312,17 @@ classDiagram
         +String rawNewPassword
     }
     ChangePasswordUseCase ..> `ChangePasswordUseCase.Command`
+
+    class ChangeCustomerTierUseCase {
+        <<interface>>
+        +changeCustomerTier(Command) void
+    }
+    class `ChangeCustomerTierUseCase.Command` {
+        <<record>>
+        +CustomerId customerId
+        +CustomerTier tier
+    }
+    ChangeCustomerTierUseCase ..> `ChangeCustomerTierUseCase.Command`
 
     class OpenCheckingAccountUseCase {
         <<interface>>
@@ -499,6 +526,7 @@ classDiagram
 
     namespace model_customer {
         class Customer
+        class CustomerTier
         class Password
         class CustomerId
     }
@@ -534,6 +562,7 @@ classDiagram
         class DeleteCustomerUseCase
         class ListCustomersUseCase
         class ChangePasswordUseCase
+        class ChangeCustomerTierUseCase
     }
 
     namespace portsOut_account {

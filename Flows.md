@@ -176,7 +176,9 @@ sequenceDiagram
 
 ## 4. TransferMoneyUseCase
 
-The most complex flow. Customer transfers money between accounts. Fee is 0% for same-customer transfers; admin-configured % for cross-customer transfers. The source account's `transferOut` follows subtype-specific rules: `CheckingAccount` allows the balance to go negative down to `-overdraftLimit`; `SavingsAccount` rejects any overdraw; `TimeDepositAccount` always throws ("transfers not supported"). Any `IllegalStateException` is wrapped by the service as `InvalidAccountOperationException` (HTTP 422).
+The most complex flow. Customer transfers money between accounts. Before any debit, the application service fetches the **source customer** to read their `CustomerTier`, then asks `TransferDomainService` to (a) reject the transfer if the amount exceeds the tier's per-transaction cap (→ `LimitExceededException`, HTTP 422) and (b) calculate the fee. Same-customer transfers are free; cross-customer transfers charge `amount × admin_fee_percent × tier.feeMultiplier()` — STANDARD pays full, PREMIUM pays half, PRIVATE pays nothing.
+
+The source account's `transferOut` follows subtype-specific rules: `CheckingAccount` allows the balance to go negative down to `-overdraftLimit`; `SavingsAccount` rejects any overdraw; `TimeDepositAccount` always throws ("transfers not supported"). Any `IllegalStateException` is wrapped by the service as `InvalidAccountOperationException` (HTTP 422).
 
 ```mermaid
 sequenceDiagram
@@ -188,6 +190,7 @@ sequenceDiagram
     participant TransferSvc as TransferDomainService
     participant SrcAccount  as Source Account (entity)
     participant TgtAccount  as Target Account (entity)
+    participant CustRepo    as CustomerPersistenceAdapter
     participant Settings    as SettingsPersistenceAdapter
     participant AccRepo     as AccountPersistenceAdapter
     participant TxRepo      as TransactionPersistenceAdapter
@@ -209,6 +212,14 @@ sequenceDiagram
     DB-->>AccRepo: AccountJpaEntity (ownerId = B)
     AccRepo-->>AppSvc: Target Account
 
+    AppSvc->>CustRepo: findById(source.ownerId)
+    CustRepo->>DB: SELECT * FROM customers WHERE id=?
+    DB-->>CustRepo: CustomerJpaEntity{tier=...}
+    CustRepo-->>AppSvc: Source Customer{tier}
+
+    AppSvc->>TransferSvc: requireTransferWithinLimit(amount, tier)
+    Note over TransferSvc: throws IllegalStateException<br/>→ wrapped as<br/>LimitExceededException (HTTP 422)<br/>if amount > tier.maxPerTransfer
+
     AppSvc->>AppSvc: sameCustomer = (source.ownerId == target.ownerId)?
 
     AppSvc->>Settings: getTransferFeePercent()
@@ -216,8 +227,8 @@ sequenceDiagram
     DB-->>Settings: "1.0"
     Settings-->>AppSvc: BigDecimal(1.0)
 
-    AppSvc->>TransferSvc: calculateFee(amount, sameCustomer, feePercent)
-    Note over TransferSvc: if sameCustomer → fee = 0<br/>else fee = amount × feePercent / 100
+    AppSvc->>TransferSvc: calculateFee(amount, sameCustomer, feePercent, sourceTier)
+    Note over TransferSvc: if sameCustomer → fee = 0<br/>else fee = amount × feePercent × tier.feeMultiplier / 100<br/>(STANDARD 1.0×, PREMIUM 0.5×, PRIVATE 0.0×)
     TransferSvc-->>AppSvc: Money fee
 
     AppSvc->>SrcAccount: transferOut(amount, fee, targetId)

@@ -38,13 +38,14 @@ Default admin credentials: `admin@ayvalikbank.dev` / `Admin@123!`
 
 The domain models a bank with two roles:
 
-- **Admin** — creates and deletes customers, sets the transfer fee, freezes/unfreezes/closes accounts
+- **Admin** — creates and deletes customers, sets the transfer fee, changes customer tiers, freezes/unfreezes/closes accounts
 - **Customer** — opens accounts, deposits, withdraws, transfers money, changes password
 
 Key domain rules:
 - Accounts have a currency; all operations are currency-matched
 - Accounts follow a state machine: `ACTIVE → FROZEN → ACTIVE`, `ACTIVE|FROZEN → CLOSED` (terminal)
-- Transfers between accounts of the same customer are free; cross-customer transfers carry an admin-configured fee
+- Transfers between accounts of the same customer are free; cross-customer transfers carry an admin-configured fee scaled by the source customer's tier
+- Each customer has a tier — `STANDARD`, `PREMIUM`, or `PRIVATE` — that scales their cross-customer fee (1.0× / 0.5× / 0.0×) and caps per-transaction transfers and withdrawals (PRIVATE = unlimited)
 - Passwords must meet a strength policy and cannot reuse the last 3 passwords
 
 Three account types are supported, each with its own behavior:
