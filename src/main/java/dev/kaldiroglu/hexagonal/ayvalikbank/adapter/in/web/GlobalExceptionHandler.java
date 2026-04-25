@@ -41,6 +41,11 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 
+    @ExceptionHandler(InvalidAccountOperationException.class)
+    public ProblemDetail handleInvalidAccountOperation(InvalidAccountOperationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+    }
+
     @ExceptionHandler(UnauthorizedAccessException.class)
     public ProblemDetail handleUnauthorized(UnauthorizedAccessException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());

@@ -3,6 +3,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.AccountRepositoryPort;
@@ -13,12 +14,16 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.TransferDomainService
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
 @Transactional
 public class AccountApplicationService implements
-        CreateAccountUseCase,
+        OpenCheckingAccountUseCase,
+        OpenSavingsAccountUseCase,
+        OpenTimeDepositAccountUseCase,
         DepositMoneyUseCase,
         WithdrawMoneyUseCase,
         GetBalanceUseCase,
@@ -27,7 +32,9 @@ public class AccountApplicationService implements
         ListAccountsUseCase,
         FreezeAccountUseCase,
         UnfreezeAccountUseCase,
-        CloseAccountUseCase {
+        CloseAccountUseCase,
+        AccrueInterestUseCase,
+        MatureTimeDepositUseCase {
 
     private final AccountRepositoryPort accountRepository;
     private final CustomerRepositoryPort customerRepository;
@@ -48,17 +55,37 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public Account createAccount(CreateAccountUseCase.Command command) {
-        if (!customerRepository.existsById(command.ownerId()))
-            throw new CustomerNotFoundException("Customer not found: " + command.ownerId());
-        Account account = Account.open(command.ownerId(), command.currency());
-        return accountRepository.save(account);
+    public CheckingAccount openChecking(OpenCheckingAccountUseCase.Command command) {
+        requireCustomerExists(command.ownerId());
+        CheckingAccount account = CheckingAccount.open(command.ownerId(), command.currency(), command.overdraftLimit());
+        return (CheckingAccount) accountRepository.save(account);
+    }
+
+    @Override
+    public SavingsAccount openSavings(OpenSavingsAccountUseCase.Command command) {
+        requireCustomerExists(command.ownerId());
+        SavingsAccount account = SavingsAccount.open(command.ownerId(), command.currency(), command.annualInterestRate());
+        return (SavingsAccount) accountRepository.save(account);
+    }
+
+    @Override
+    public TimeDepositAccount openTimeDeposit(OpenTimeDepositAccountUseCase.Command command) {
+        requireCustomerExists(command.ownerId());
+        TimeDepositAccount account = TimeDepositAccount.open(
+                command.ownerId(), command.currency(), command.principal(),
+                LocalDate.now(), command.maturityDate(), command.annualInterestRate());
+        return (TimeDepositAccount) accountRepository.save(account);
     }
 
     @Override
     public Transaction deposit(DepositMoneyUseCase.Command command) {
         Account account = findAccountOrThrow(command.accountId());
-        Transaction tx = account.deposit(command.amount());
+        Transaction tx;
+        try {
+            tx = account.deposit(command.amount());
+        } catch (IllegalStateException e) {
+            throw new InvalidAccountOperationException(e.getMessage());
+        }
         accountRepository.save(account);
         return transactionRepository.save(tx);
     }
@@ -66,7 +93,12 @@ public class AccountApplicationService implements
     @Override
     public Transaction withdraw(WithdrawMoneyUseCase.Command command) {
         Account account = findAccountOrThrow(command.accountId());
-        Transaction tx = account.withdraw(command.amount());
+        Transaction tx;
+        try {
+            tx = account.withdraw(command.amount());
+        } catch (IllegalStateException e) {
+            throw new InvalidAccountOperationException(e.getMessage());
+        }
         accountRepository.save(account);
         return transactionRepository.save(tx);
     }
@@ -80,7 +112,7 @@ public class AccountApplicationService implements
     @Override
     @Transactional(readOnly = true)
     public List<Transaction> getTransactions(AccountId accountId) {
-        findAccountOrThrow(accountId); // existence check
+        findAccountOrThrow(accountId);
         return transactionRepository.findByAccountId(accountId);
     }
 
@@ -90,11 +122,16 @@ public class AccountApplicationService implements
         Account target = findAccountOrThrow(command.targetAccountId());
 
         boolean sameCustomer = source.getOwnerId().equals(target.getOwnerId());
-        java.math.BigDecimal feePercent = settingsRepository.getTransferFeePercent();
+        BigDecimal feePercent = settingsRepository.getTransferFeePercent();
         Money fee = transferDomainService.calculateFee(command.amount(), sameCustomer, feePercent);
 
-        Transaction outTx = source.transferOut(command.amount(), fee, target.getId().toString());
-        Transaction inTx = target.transferIn(command.amount(), source.getId().toString());
+        Transaction outTx, inTx;
+        try {
+            outTx = source.transferOut(command.amount(), fee, target.getId().toString());
+            inTx = target.transferIn(command.amount(), source.getId().toString());
+        } catch (IllegalStateException e) {
+            throw new InvalidAccountOperationException(e.getMessage());
+        }
 
         accountRepository.save(source);
         accountRepository.save(target);
@@ -105,42 +142,61 @@ public class AccountApplicationService implements
     @Override
     @Transactional(readOnly = true)
     public List<Account> listAccounts(CustomerId ownerId) {
-        if (!customerRepository.existsById(ownerId))
-            throw new CustomerNotFoundException("Customer not found: " + ownerId);
+        requireCustomerExists(ownerId);
         return accountRepository.findByOwnerId(ownerId);
     }
 
     @Override
     public void freezeAccount(AccountId accountId) {
         Account account = findAccountOrThrow(accountId);
-        try {
-            account.freeze();
-        } catch (IllegalStateException e) {
-            throw new AccountNotOperableException(e.getMessage());
-        }
+        try { account.freeze(); }
+        catch (IllegalStateException e) { throw new AccountNotOperableException(e.getMessage()); }
         accountRepository.save(account);
     }
 
     @Override
     public void unfreezeAccount(AccountId accountId) {
         Account account = findAccountOrThrow(accountId);
-        try {
-            account.unfreeze();
-        } catch (IllegalStateException e) {
-            throw new AccountNotOperableException(e.getMessage());
-        }
+        try { account.unfreeze(); }
+        catch (IllegalStateException e) { throw new AccountNotOperableException(e.getMessage()); }
         accountRepository.save(account);
     }
 
     @Override
     public void closeAccount(AccountId accountId) {
         Account account = findAccountOrThrow(accountId);
-        try {
-            account.close();
-        } catch (IllegalStateException e) {
-            throw new AccountNotOperableException(e.getMessage());
-        }
+        try { account.close(); }
+        catch (IllegalStateException e) { throw new AccountNotOperableException(e.getMessage()); }
         accountRepository.save(account);
+    }
+
+    @Override
+    public Transaction accrueInterest(AccrueInterestUseCase.Command command) {
+        Account account = findAccountOrThrow(command.accountId());
+        if (!(account instanceof SavingsAccount savings))
+            throw new InvalidAccountOperationException("Account is not a savings account");
+        Transaction tx;
+        try { tx = savings.accrueInterest(command.month()); }
+        catch (IllegalStateException e) { throw new InvalidAccountOperationException(e.getMessage()); }
+        accountRepository.save(savings);
+        return transactionRepository.save(tx);
+    }
+
+    @Override
+    public Transaction mature(MatureTimeDepositUseCase.Command command) {
+        Account account = findAccountOrThrow(command.accountId());
+        if (!(account instanceof TimeDepositAccount td))
+            throw new InvalidAccountOperationException("Account is not a time deposit");
+        Transaction tx;
+        try { tx = td.mature(LocalDate.now()); }
+        catch (IllegalStateException e) { throw new InvalidAccountOperationException(e.getMessage()); }
+        accountRepository.save(td);
+        return transactionRepository.save(tx);
+    }
+
+    private void requireCustomerExists(CustomerId id) {
+        if (!customerRepository.existsById(id))
+            throw new CustomerNotFoundException("Customer not found: " + id);
     }
 
     private Account findAccountOrThrow(AccountId accountId) {

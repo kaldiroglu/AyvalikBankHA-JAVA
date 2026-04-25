@@ -43,7 +43,8 @@ domain/port/out/         → Repository and infrastructure interfaces
 ## Key Design Decisions
 
 - **Value objects as records**: `CustomerId`, `AccountId`, `TransactionId`, `Money`, `Password` — immutable, self-validating.
-- **Rich entities**: `Account` exposes `deposit()`, `withdraw()`, `transferOut()`, `transferIn()` which return `Transaction` objects and enforce all invariants.
+- **Sealed account hierarchy**: `Account` is a `sealed abstract class` permitting `CheckingAccount`, `SavingsAccount`, and `TimeDepositAccount`. Each subtype overrides `deposit`/`withdraw`/`transferOut` with its own rules: `CheckingAccount` allows configurable overdraft; `SavingsAccount` rejects overdraft and supports monthly interest accrual via `accrueInterest(YearMonth)`; `TimeDepositAccount` locks principal at open and rejects withdrawals until `mature(LocalDate)` is called on or after the maturity date.
+- **Three account types**: `CheckingAccount` carries an `overdraftLimit` — withdrawals may take the balance negative up to that limit. `SavingsAccount` carries an `annualInterestRate` and a `lastAccrualDate`; `accrueInterest` credits monthly interest and works on ACTIVE or FROZEN accounts (but not CLOSED). `TimeDepositAccount` locks the principal at open; `deposit` is rejected; `mature` must be called on or after the maturity date and credits the annual interest; withdrawals are then permitted.
 - **Password history**: `Customer` holds `currentPassword` + up to 3 previous hashes. Reuse checking (BCrypt) lives in `CustomerApplicationService` since it requires the `PasswordHasherPort`.
 - **Transfer fee**: free for same-customer transfers; `TransferDomainService.calculateFee()` applies the admin-configured percentage for cross-customer transfers. Fee stored in `settings` table.
 - **Account status**: `AccountStatus` enum (`ACTIVE`, `FROZEN`, `CLOSED`) is a state machine inside `Account`. All mutating operations (`deposit`, `withdraw`, `transferOut`, `transferIn`) call `requireActive()` first. Transitions: `freeze()`, `unfreeze()`, `close()` — `CLOSED` is terminal. Invalid transitions throw `IllegalStateException`; the application service converts this to `AccountNotOperableException` → HTTP 422.
@@ -61,8 +62,12 @@ domain/port/out/         → Repository and infrastructure interfaces
 | PUT | `/api/admin/accounts/{id}/freeze` | ADMIN | Freeze account |
 | PUT | `/api/admin/accounts/{id}/unfreeze` | ADMIN | Unfreeze account |
 | PUT | `/api/admin/accounts/{id}/close` | ADMIN | Close account (terminal) |
+| PUT | `/api/admin/accounts/{id}/accrue-interest` | ADMIN | Credit monthly interest to a savings account |
+| PUT | `/api/admin/accounts/{id}/mature` | ADMIN | Mature a time deposit and credit accrued interest |
 | PUT | `/api/customers/{id}/password` | CUSTOMER | Change password |
-| POST | `/api/accounts?ownerId=` | CUSTOMER | Open account |
+| POST | `/api/accounts/checking?ownerId=` | CUSTOMER | Open checking account (with optional overdraft) |
+| POST | `/api/accounts/savings?ownerId=` | CUSTOMER | Open savings account (with annual interest rate) |
+| POST | `/api/accounts/time-deposit?ownerId=` | CUSTOMER | Open time deposit (principal locked until maturity) |
 | GET | `/api/customers/{id}/accounts` | CUSTOMER | List accounts |
 | GET | `/api/accounts/{id}/balance` | CUSTOMER | Get balance |
 | POST | `/api/accounts/{id}/deposit` | CUSTOMER | Deposit |

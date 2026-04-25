@@ -1,8 +1,10 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 
+import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.AccrueInterestRequest;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.CreateCustomerRequest;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.SetTransferFeeRequest;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.CustomerResponse;
+import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.TransactionResponse;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.AccountId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.*;
@@ -25,6 +27,8 @@ public class AdminController {
     private final FreezeAccountUseCase freezeAccount;
     private final UnfreezeAccountUseCase unfreezeAccount;
     private final CloseAccountUseCase closeAccount;
+    private final AccrueInterestUseCase accrueInterest;
+    private final MatureTimeDepositUseCase matureTimeDeposit;
 
     public AdminController(CreateCustomerUseCase createCustomer,
                            DeleteCustomerUseCase deleteCustomer,
@@ -32,7 +36,9 @@ public class AdminController {
                            SetTransferFeeUseCase setTransferFee,
                            FreezeAccountUseCase freezeAccount,
                            UnfreezeAccountUseCase unfreezeAccount,
-                           CloseAccountUseCase closeAccount) {
+                           CloseAccountUseCase closeAccount,
+                           AccrueInterestUseCase accrueInterest,
+                           MatureTimeDepositUseCase matureTimeDeposit) {
         this.createCustomer = createCustomer;
         this.deleteCustomer = deleteCustomer;
         this.listCustomers = listCustomers;
@@ -40,6 +46,8 @@ public class AdminController {
         this.freezeAccount = freezeAccount;
         this.unfreezeAccount = unfreezeAccount;
         this.closeAccount = closeAccount;
+        this.accrueInterest = accrueInterest;
+        this.matureTimeDeposit = matureTimeDeposit;
     }
 
     @PostMapping("/customers")
@@ -85,5 +93,19 @@ public class AdminController {
     public ResponseEntity<Void> closeAccount(@PathVariable String accountId) {
         closeAccount.closeAccount(AccountId.of(accountId));
         return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/accounts/{accountId}/accrue-interest")
+    public ResponseEntity<TransactionResponse> accrueInterest(@PathVariable String accountId,
+                                                               @Valid @RequestBody AccrueInterestRequest request) {
+        var tx = accrueInterest.accrueInterest(new AccrueInterestUseCase.Command(
+                AccountId.of(accountId), request.month()));
+        return ResponseEntity.ok(TransactionResponse.from(tx));
+    }
+
+    @PutMapping("/accounts/{accountId}/mature")
+    public ResponseEntity<TransactionResponse> matureTimeDeposit(@PathVariable String accountId) {
+        var tx = matureTimeDeposit.mature(new MatureTimeDepositUseCase.Command(AccountId.of(accountId)));
+        return ResponseEntity.ok(TransactionResponse.from(tx));
     }
 }

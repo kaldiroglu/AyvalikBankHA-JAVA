@@ -10,7 +10,7 @@ Demonstrate how to apply hexagonal architecture to a real domain — a simplifie
 
 | Concern | Technology |
 |---------|-----------|
-| Language | Java 21 |
+| Language | Java 25 |
 | Framework | Spring Boot 3.4 |
 | Persistence | Spring Data JPA + PostgreSQL |
 | Security | Spring Security (HTTP Basic Auth) |
@@ -46,6 +46,11 @@ Key domain rules:
 - Accounts follow a state machine: `ACTIVE → FROZEN → ACTIVE`, `ACTIVE|FROZEN → CLOSED` (terminal)
 - Transfers between accounts of the same customer are free; cross-customer transfers carry an admin-configured fee
 - Passwords must meet a strength policy and cannot reuse the last 3 passwords
+
+Three account types are supported, each with its own behavior:
+- **CheckingAccount** — general-purpose account with a configurable overdraft limit; withdrawals may take the balance negative up to that limit
+- **SavingsAccount** — no overdraft; supports monthly interest accrual (`accrueInterest`) at a configurable annual rate; accrual works on ACTIVE and FROZEN accounts
+- **TimeDepositAccount** — principal is locked at opening; deposits are rejected; the account must be matured (`mature`) on or after the maturity date, which credits the full annual interest; withdrawals are only permitted after maturity
 
 ## Documentation
 

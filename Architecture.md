@@ -32,19 +32,19 @@ The core idea is the **Dependency Rule**: every arrow points inward. The domain 
 ### 1. Domain Layer (`domain/`)
 The heart of the application. **No Spring, no JPA, no BCrypt** — plain Java only.
 
-**Entities** (`domain/model/`): `Customer`, `Account`, `Transaction`
+**Entities** (`domain/model/`): `Customer`, `Account` (sealed hierarchy — see below), `Transaction`
 
 These are *rich* objects. `Account` owns its own invariants:
 ```java
 account.deposit(money)      // validates currency + ACTIVE status, updates balance, returns Transaction
-account.withdraw(money)     // validates sufficient funds + ACTIVE status
+account.withdraw(money)     // validates sufficient funds + ACTIVE status (rules differ per subtype)
 account.transferOut(...)    // deducts amount + fee, requires ACTIVE status
 account.freeze()            // ACTIVE → FROZEN
 account.unfreeze()          // FROZEN → ACTIVE
 account.close()             // ACTIVE|FROZEN → CLOSED (terminal)
 ```
 
-**Enums** (`domain/model/`): `AccountStatus` (`ACTIVE`, `FROZEN`, `CLOSED`), `Currency`, `TransactionType`
+**Enums** (`domain/model/`): `AccountStatus` (`ACTIVE`, `FROZEN`, `CLOSED`), `AccountType` (`CHECKING`, `SAVINGS`, `TIME_DEPOSIT`), `Currency`, `TransactionType` (includes `INTEREST`)
 
 `AccountStatus` drives a state machine inside `Account`. All mutating operations require `ACTIVE`; invalid transitions throw `IllegalStateException`.
 
@@ -56,9 +56,23 @@ Immutable and self-validating. `Money.subtract()` throws if balance is insuffici
 - `PasswordValidationService` — enforces 8-16 char, upper/lower/digit/special rules
 - `TransferDomainService` — computes fees (0% same customer, configurable % cross-customer)
 
-**Ports In** (`domain/port/in/`): Use-case interfaces such as `CreateCustomerUseCase`, `DepositMoneyUseCase`, `FreezeAccountUseCase`, `UnfreezeAccountUseCase`, `CloseAccountUseCase`. Each carries a nested `Command` record for its input (or takes a typed ID directly for simple operations).
+**Ports In** (`domain/port/in/`): Use-case interfaces such as `CreateCustomerUseCase`, `OpenCheckingAccountUseCase`, `OpenSavingsAccountUseCase`, `OpenTimeDepositAccountUseCase`, `DepositMoneyUseCase`, `FreezeAccountUseCase`, `UnfreezeAccountUseCase`, `CloseAccountUseCase`, `AccrueInterestUseCase`, `MatureTimeDepositUseCase`. Each carries a nested `Command` record for its input (or takes a typed ID directly for simple operations).
 
 **Ports Out** (`domain/port/out/`): Repository interfaces (`CustomerRepositoryPort`, `AccountRepositoryPort`, etc.) and infrastructure interfaces (`PasswordHasherPort`, `SettingsRepositoryPort`). The domain *declares* what it needs; the adapters *provide* it.
+
+---
+
+## Account hierarchy
+
+`Account` is a `sealed abstract class` that permits exactly three concrete subtypes: `CheckingAccount`, `SavingsAccount`, and `TimeDepositAccount`. All three share the same status state machine (`ACTIVE → FROZEN → ACTIVE`, `ACTIVE|FROZEN → CLOSED`), the same `transferIn` implementation, and the same `requireActive()` guard — but each overrides `deposit`, `withdraw`, and `transferOut` with its own rules.
+
+**CheckingAccount** carries a single extra field: `overdraftLimit` (a `Money` value). `withdraw` and `transferOut` allow the balance to go negative, but only down to `-overdraftLimit`. A zero overdraft limit means standard no-overdraft behavior. No extra lifecycle operations.
+
+**SavingsAccount** carries `annualInterestRate` (a `BigDecimal`) and `lastAccrualDate` (a `LocalDate`). `withdraw` and `transferOut` reject any amount that would take the balance negative. The extra operation `accrueInterest(YearMonth)` computes monthly interest (`balance × rate / 12`), credits it as an `INTEREST` transaction, and records the end-of-month date in `lastAccrualDate`. Accrual works on ACTIVE and FROZEN accounts (it is an admin-triggered bookkeeping step, not a customer-initiated mutation), but is rejected on CLOSED accounts. Double-accrual for the same month is rejected.
+
+**TimeDepositAccount** carries `principal`, `openDate`, `maturityDate`, `annualInterestRate`, and a `matured` flag. At open, the principal is placed as the opening balance. `deposit` is always rejected ("principal is locked"). `withdraw` and `transferOut` are rejected until `matured` is true. The extra operation `mature(LocalDate)` validates that the given date is on or after the maturity date, then credits `principal × annualInterestRate` as an `INTEREST` transaction and sets the `matured` flag — enabling withdrawals. Maturation works on ACTIVE and FROZEN accounts but not CLOSED ones. Double maturation is rejected.
+
+This hierarchy enriches the `domain/model/` layer only. No new layers are introduced. The persistence adapter handles the three subtypes via a discriminator column (`account_type`) on the existing `accounts` table, and the mapper reconstructs the correct subtype when loading.
 
 ---
 

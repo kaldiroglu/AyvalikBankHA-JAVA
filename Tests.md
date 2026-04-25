@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-100 tests across 8 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+133 tests across 12 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -19,15 +19,15 @@ mvn test -Dtest=AccountControllerTest
 ```
                        ┌────────────────────────────┐
                        │     Controller Tests       │  @WebMvcTest
-                       │ (MockMvc, mocked use cases)│  43 tests
+                       │ (MockMvc, mocked use cases)│  48 tests
                        └────────────────────────────┘
                ┌──────────────────────────────────────────────┐
                │          Application Service Tests           │  Mockito only
-               │    (mocked ports, real domain objects)       │  18 tests
+               │    (mocked ports, real domain objects)       │  24 tests
                └──────────────────────────────────────────────┘
       ┌──────────────────────────────────────────────────────────────┐
       │                     Domain Unit Tests                        │  Pure Java
-      │                (no mocks, no Spring, no I/O)                 │  39 tests
+      │                (no mocks, no Spring, no I/O)                 │  61 tests
       └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -39,21 +39,23 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 
 ---
 
-### `MoneyTest` — 7 tests
+### `MoneyTest` — 9 tests
 
 **Class under test:** `domain/model/Money.java` (value object / record)
 
-`Money` holds an amount and a currency. It enforces non-negative amounts and disallows arithmetic across different currencies.
+`Money` holds an amount and a currency. It permits negative amounts (required to represent overdraft balances) and disallows arithmetic across different currencies.
 
 | Test | What it verifies |
 |------|-----------------|
 | `shouldCreateMoneyWithValidAmountAndCurrency` | `Money.of(100.0, USD)` stores the amount as a `BigDecimal` and the correct currency. |
-| `shouldRejectNegativeAmount` | Constructing money with a negative amount throws `IllegalArgumentException` with "negative" in the message. |
+| `shouldAllowNegativeAmount` | `Money.of(-50.0, EUR)` succeeds and `isNegative()` returns true. |
 | `shouldAddMoneyOfSameCurrency` | Adding two USD amounts returns a new `Money` with the correct sum. |
 | `shouldRejectAddingDifferentCurrencies` | Adding USD to EUR throws `IllegalArgumentException` with "Currency mismatch". |
-| `shouldSubtractMoneyOfSameCurrency` | Subtracting a smaller TL amount from a larger one returns the correct difference. |
-| `shouldRejectSubtractingMoreThanAvailable` | Subtracting an amount larger than the minuend throws `IllegalArgumentException` with "Insufficient". |
+| `shouldSubtractMoneyOfSameCurrency` | Subtracting a smaller TL amount from a larger one returns the correct positive difference. |
+| `shouldSubtractLargerFromSmallerReturningNegative` | Subtracting a larger amount from a smaller one returns a negative `Money` (no exception). |
 | `shouldReturnZeroMoneyForCurrency` | `Money.zero(EUR)` returns a `Money` with amount `0` and currency EUR. |
+| `shouldNegatePositiveMoney` | `positive.negate()` returns a `Money` with the negated amount and `isNegative()` true. |
+| `shouldRejectNullAmount` | `Money.of(null, USD)` throws `IllegalArgumentException` with "null". |
 
 ---
 
@@ -125,6 +127,59 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 
 ---
 
+### `CheckingAccountTest` — 4 tests
+
+**Class under test:** `domain/model/CheckingAccount.java` (sealed subtype of `Account`)
+
+`CheckingAccount` extends the base account with an optional overdraft limit. Withdrawals may take the balance negative down to `-overdraftLimit`.
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldOpenWithZeroBalanceAndNoOverdraftByDefault` | `CheckingAccount.open(owner, USD)` starts with zero balance, `CHECKING` type, and zero overdraft limit. |
+| `shouldWithdrawIntoOverdraftWhenLimitAllows` | With a $100 overdraft limit and $50 balance, withdrawing $120 succeeds and leaves the balance at -$70. |
+| `shouldRejectWithdrawalBeyondOverdraftLimit` | Withdrawing $60 with no balance and only a $50 overdraft limit throws `IllegalArgumentException` with "overdraft". |
+| `shouldRejectWithdrawalWhenNoOverdraftAndInsufficientFunds` | Withdrawing more than the balance from an account with no overdraft throws `IllegalArgumentException` with "Insufficient". |
+
+---
+
+### `SavingsAccountTest` — 7 tests
+
+**Class under test:** `domain/model/SavingsAccount.java` (sealed subtype of `Account`)
+
+`SavingsAccount` carries an annual interest rate and tracks the last accrual date. Interest is credited month by month via `accrueInterest(YearMonth)`.
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldOpenWithGivenInterestRateAndZeroBalance` | `SavingsAccount.open(owner, USD, 0.03)` starts with `SAVINGS` type, the given rate, and zero balance. |
+| `shouldRejectNegativeInterestRate` | Constructing with a negative rate throws `IllegalArgumentException`. |
+| `shouldRejectWithdrawalThatWouldOverdraw` | Withdrawing more than the balance throws `IllegalArgumentException` with "Insufficient". |
+| `shouldAccrueInterestForAMonth` | On a $1,000 balance at 12% annual, `accrueInterest(2026-04)` returns an `INTEREST` transaction of $10, raises balance to $1,010, and sets `lastAccrualDate` to 2026-05-01. |
+| `shouldAccrueInterestEvenWhenFrozen` | `accrueInterest` succeeds on a FROZEN account (admin-triggered bookkeeping is not blocked by frozen status). |
+| `shouldRejectAccrualOnClosedAccount` | `accrueInterest` on a CLOSED account throws `IllegalStateException` with "closed". |
+| `shouldRejectDoubleAccrualForSameMonth` | Calling `accrueInterest` twice for the same `YearMonth` throws `IllegalStateException` with "already accrued". |
+
+---
+
+### `TimeDepositAccountTest` — 9 tests
+
+**Class under test:** `domain/model/TimeDepositAccount.java` (sealed subtype of `Account`)
+
+`TimeDepositAccount` locks the principal at open. Deposits are rejected, withdrawals are blocked until `mature(LocalDate)` is called on or after the maturity date.
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldOpenWithPrincipalAsBalance` | Opening sets the balance to the principal amount, type to `TIME_DEPOSIT`, and `isMatured()` to false. |
+| `shouldRejectFurtherDeposits` | Calling `deposit` on a time deposit throws `IllegalStateException` with "locked". |
+| `shouldRejectWithdrawalBeforeMaturity` | Calling `withdraw` before maturity throws `IllegalStateException` with "matured". |
+| `shouldRejectMaturationBeforeMaturityDate` | `mature(date)` with a date before the maturity date throws `IllegalStateException` with "not yet". |
+| `shouldMatureOnOrAfterMaturityDateAndCreditInterest` | `mature(maturityDate)` returns an `INTEREST` transaction equal to `principal × rate`, adds it to the balance, and sets `isMatured()` to true. |
+| `shouldAllowWithdrawalAfterMaturity` | After `mature(...)`, `withdraw` succeeds and reduces the balance correctly. |
+| `shouldRejectDoubleMaturation` | Calling `mature` a second time throws `IllegalStateException` with "already matured". |
+| `shouldMatureWhenFrozen` | `mature` succeeds on a FROZEN account and credits interest; account status remains `FROZEN`. |
+| `shouldRejectMaturationOnClosedAccount` | `mature` on a CLOSED account throws `IllegalStateException`. |
+
+---
+
 ### `PasswordValidationServiceTest` — 8 tests
 
 **Class under test:** `domain/service/PasswordValidationService.java` (domain service)
@@ -167,19 +222,26 @@ These tests cover the orchestration layer. All repository and infrastructure por
 
 ---
 
-### `AccountApplicationServiceTest` — 12 tests
+### `AccountApplicationServiceTest` — 18 tests
 
 **Class under test:** `application/service/AccountApplicationService.java`
 
 **Mocked ports:** `AccountRepositoryPort`, `CustomerRepositoryPort`, `TransactionRepositoryPort`, `SettingsRepositoryPort`
-**Real domain objects:** `Account`, `Transaction`, `TransferDomainService`
+**Real domain objects:** `Account` subtypes, `Transaction`, `TransferDomainService`
+
+#### Account opening
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldOpenCheckingAccountForExistingCustomer` | `openChecking` verifies the owner exists, opens a `CheckingAccount`, saves it, and returns it with the correct currency. |
+| `shouldOpenSavingsAccountForExistingCustomer` | `openSavings` opens a `SavingsAccount` with the given interest rate and saves it. |
+| `shouldOpenTimeDepositAccountForExistingCustomer` | `openTimeDeposit` opens a `TimeDepositAccount` with the given principal and maturity date and saves it. |
+| `shouldThrowCustomerNotFoundWhenOpeningCheckingForMissingOwner` | `openChecking` throws `CustomerNotFoundException` when the owner does not exist. |
 
 #### Account operations
 
 | Test | What it verifies |
 |------|-----------------|
-| `shouldCreateAccountForExistingCustomer` | `createAccount` checks that the owner exists, opens an account with zero balance, saves it, and returns it with the correct currency and owner. |
-| `shouldThrowCustomerNotFoundWhenOwnerMissing` | `createAccount` throws `CustomerNotFoundException` when `existsById` returns false. |
 | `shouldDepositMoneyToAccount` | `deposit` loads the account, calls `account.deposit(...)`, saves the updated account, saves the transaction, and returns the `DEPOSIT` transaction. Balance on the in-memory account is 200 after the call. |
 | `shouldThrowAccountNotFoundOnDepositToMissingAccount` | `deposit` throws `AccountNotFoundException` when `findById` returns empty. |
 | `shouldTransferBetweenAccountsOfSameCustomerFreeOfCharge` | Transfer between two accounts owned by the same customer applies 0% fee regardless of the configured rate. Source ends at 300, target at 200. |
@@ -196,6 +258,15 @@ These tests cover the orchestration layer. All repository and infrastructure por
 | `shouldThrowAccountNotOperableWhenFreezingClosedAccount` | When the domain entity throws `IllegalStateException` (e.g. freezing a closed account), the service wraps it in `AccountNotOperableException`. |
 | `shouldThrowAccountNotFoundWhenFreezingMissingAccount` | `freezeAccount` throws `AccountNotFoundException` when `findById` returns empty. |
 
+#### Savings and time-deposit operations
+
+| Test | What it verifies |
+|------|-----------------|
+| `shouldAccrueInterestOnSavingsAccount` | `accrueInterest` loads a `SavingsAccount`, delegates to `account.accrueInterest(yearMonth)`, saves the account, saves the transaction, and returns the `INTEREST` transaction. |
+| `shouldRejectAccrueInterestOnNonSavingsAccount` | `accrueInterest` called with a non-`SavingsAccount` throws `AccountNotOperableException`. |
+| `shouldMatureTimeDepositOnOrAfterMaturityDate` | `matureTimeDeposit` loads a `TimeDepositAccount`, delegates to `account.mature(date)`, saves the account, saves the transaction, and returns the `INTEREST` transaction. |
+| `shouldRejectMatureOnNonTimeDepositAccount` | `matureTimeDeposit` called with a non-`TimeDepositAccount` throws `AccountNotOperableException`. |
+
 ---
 
 ## Controller Tests (Web Layer)
@@ -211,7 +282,7 @@ No real application service or database is involved. The goal is to verify:
 
 ---
 
-### `AdminControllerTest` — 19 tests
+### `AdminControllerTest` — 22 tests
 
 **Controller:** `adapter/in/web/AdminController.java` (`/api/admin/**`)
 **Required role:** `ROLE_ADMIN`
@@ -270,6 +341,19 @@ No real application service or database is involved. The goal is to verify:
 | `closeAccount_returnsUnprocessableEntityForAlreadyClosed` | Use case throws `AccountNotOperableException` (already closed) → 422. |
 | `closeAccount_returnsForbiddenForCustomerRole` | `ROLE_CUSTOMER` → 403. |
 
+#### `PUT /api/admin/accounts/{id}/accrue-interest`
+
+| Test | What it verifies |
+|------|-----------------|
+| `accrueInterest_returnsOk` | Valid `yearMonth` → 200; use case called once with correct command. |
+| `accrueInterest_returnsForbiddenForCustomerRole` | `ROLE_CUSTOMER` → 403. |
+
+#### `PUT /api/admin/accounts/{id}/mature`
+
+| Test | What it verifies |
+|------|-----------------|
+| `matureTimeDeposit_returnsOk` | Valid `date` → 200; use case called once with correct command. |
+
 ---
 
 ### `CustomerControllerTest` — 7 tests
@@ -291,18 +375,30 @@ No real application service or database is involved. The goal is to verify:
 
 ---
 
-### `AccountControllerTest` — 17 tests
+### `AccountControllerTest` — 19 tests
 
 **Controller:** `adapter/in/web/AccountController.java` (`/api/accounts/**`, `/api/customers/**`)
 **Required role:** `ROLE_CUSTOMER`
 
-#### `POST /api/accounts`
+#### `POST /api/accounts/checking`
 
 | Test | What it verifies |
 |------|-----------------|
-| `createAccount_returnsCreated` | Valid body with `ownerId` param → 201, JSON has `currency: "USD"` and `balance: 0`. |
-| `createAccount_returnsBadRequestOnMissingCurrency` | Empty body `{}` → 400 (`@NotNull` on currency); use case never called. |
-| `createAccount_returnsForbiddenForAdminRole` | `ROLE_ADMIN` → 403. |
+| `openChecking_returnsCreated` | Valid body with `ownerId` param → 201, JSON has `type: "CHECKING"`, `currency: "USD"`, and `overdraftLimit: 0`. |
+| `openChecking_returnsBadRequestOnMissingCurrency` | Empty body `{}` → 400 (`@NotNull` on currency); use case never called. |
+| `openChecking_returnsForbiddenForAdminRole` | `ROLE_ADMIN` → 403. |
+
+#### `POST /api/accounts/savings`
+
+| Test | What it verifies |
+|------|-----------------|
+| `openSavings_returnsCreated` | Valid body → 201, JSON has `type: "SAVINGS"` and `interestRate: 0.03`. |
+
+#### `POST /api/accounts/time-deposit`
+
+| Test | What it verifies |
+|------|-----------------|
+| `openTimeDeposit_returnsCreated` | Valid body with principal and maturity date → 201, JSON has `type: "TIME_DEPOSIT"` and `principal: 1000`. |
 
 #### `GET /api/customers/{id}/accounts`
 
@@ -543,14 +639,17 @@ The negative communication tests (`verifyNoInteractions`) are important here —
 
 | Test class | Output | State | Communication |
 |---|---|---|---|
-| `MoneyTest` | all 7 | — | — |
-| `PasswordValidationServiceTest` | all 7 | — | — |
+| `MoneyTest` | all 9 | — | — |
+| `PasswordValidationServiceTest` | all 8 | — | — |
 | `AccountTest` | ~11 (exceptions + returned Tx) | ~9 (balance, status) | — |
+| `CheckingAccountTest` | ~3 (exceptions + returned state) | ~1 (balance) | — |
+| `SavingsAccountTest` | ~5 (exceptions + returned Tx) | ~2 (balance, lastAccrualDate) | — |
+| `TimeDepositAccountTest` | ~6 (exceptions + returned Tx) | ~3 (balance, matured, status) | — |
 | `CustomerTest` | 1 | 2 | — |
-| `AccountApplicationServiceTest` | ~6 (exceptions + returned objects) | ~6 (balance, status) | 1 (only `shouldFreezeAccount`) |
+| `AccountApplicationServiceTest` | ~8 (exceptions + returned objects) | ~6 (balance, status) | 1 (only `shouldFreezeAccount`) |
 | `CustomerApplicationServiceTest` | ~3 (exceptions) | 1 | ~4 |
-| `AccountControllerTest` | ~15 (HTTP status + JSON) | — | ~5 (verify / verifyNoInteractions) |
-| `AdminControllerTest` | ~15 (HTTP status + JSON) | — | ~4 |
+| `AccountControllerTest` | ~17 (HTTP status + JSON) | — | ~5 (verify / verifyNoInteractions) |
+| `AdminControllerTest` | ~18 (HTTP status + JSON) | — | ~4 |
 | `CustomerControllerTest` | ~7 (HTTP status) | — | ~3 |
 
 ---
@@ -567,7 +666,7 @@ The negative communication tests (`verifyNoInteractions`) are important here —
 
 ## Coverage Analysis
 
-Coverage was measured with **JaCoCo 0.8.13** on Java 25, produced by `mvn verify`. The raw data comes from `target/site/jacoco/jacoco.csv`. Test classes themselves are excluded from all figures.
+Coverage was measured with **JaCoCo 0.8.13** on Java 25, produced by `mvn verify`. The raw data comes from `target/site/jacoco/jacoco.csv`. Test classes themselves are excluded from all figures. The figures below pre-date the account-types feature (sealed `Account` hierarchy + 3 subtypes); rerun `mvn verify` to refresh.
 
 ---
 

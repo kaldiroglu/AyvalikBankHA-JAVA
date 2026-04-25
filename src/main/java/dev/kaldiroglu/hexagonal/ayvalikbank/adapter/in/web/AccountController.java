@@ -1,8 +1,6 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 
-import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.CreateAccountRequest;
-import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.MoneyOperationRequest;
-import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.TransferRequest;
+import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.request.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.AccountResponse;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.BalanceResponse;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.TransactionResponse;
@@ -21,7 +19,9 @@ import java.util.List;
 @RequestMapping("/api")
 public class AccountController {
 
-    private final CreateAccountUseCase createAccount;
+    private final OpenCheckingAccountUseCase openChecking;
+    private final OpenSavingsAccountUseCase openSavings;
+    private final OpenTimeDepositAccountUseCase openTimeDeposit;
     private final DepositMoneyUseCase depositMoney;
     private final WithdrawMoneyUseCase withdrawMoney;
     private final GetBalanceUseCase getBalance;
@@ -29,14 +29,18 @@ public class AccountController {
     private final TransferMoneyUseCase transferMoney;
     private final ListAccountsUseCase listAccounts;
 
-    public AccountController(CreateAccountUseCase createAccount,
+    public AccountController(OpenCheckingAccountUseCase openChecking,
+                             OpenSavingsAccountUseCase openSavings,
+                             OpenTimeDepositAccountUseCase openTimeDeposit,
                              DepositMoneyUseCase depositMoney,
                              WithdrawMoneyUseCase withdrawMoney,
                              GetBalanceUseCase getBalance,
                              GetTransactionsUseCase getTransactions,
                              TransferMoneyUseCase transferMoney,
                              ListAccountsUseCase listAccounts) {
-        this.createAccount = createAccount;
+        this.openChecking = openChecking;
+        this.openSavings = openSavings;
+        this.openTimeDeposit = openTimeDeposit;
         this.depositMoney = depositMoney;
         this.withdrawMoney = withdrawMoney;
         this.getBalance = getBalance;
@@ -45,11 +49,32 @@ public class AccountController {
         this.listAccounts = listAccounts;
     }
 
-    @PostMapping("/accounts")
-    public ResponseEntity<AccountResponse> createAccount(@RequestParam String ownerId,
-                                                          @Valid @RequestBody CreateAccountRequest request) {
-        var account = createAccount.createAccount(
-                new CreateAccountUseCase.Command(CustomerId.of(ownerId), request.currency()));
+    @PostMapping("/accounts/checking")
+    public ResponseEntity<AccountResponse> openCheckingAccount(@RequestParam String ownerId,
+                                                                @Valid @RequestBody OpenCheckingAccountRequest request) {
+        Money overdraft = request.overdraftLimit() == null
+                ? Money.zero(request.currency())
+                : Money.of(request.overdraftLimit(), request.currency());
+        var account = openChecking.openChecking(new OpenCheckingAccountUseCase.Command(
+                CustomerId.of(ownerId), request.currency(), overdraft));
+        return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(account));
+    }
+
+    @PostMapping("/accounts/savings")
+    public ResponseEntity<AccountResponse> openSavingsAccount(@RequestParam String ownerId,
+                                                                @Valid @RequestBody OpenSavingsAccountRequest request) {
+        var account = openSavings.openSavings(new OpenSavingsAccountUseCase.Command(
+                CustomerId.of(ownerId), request.currency(), request.annualInterestRate()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(account));
+    }
+
+    @PostMapping("/accounts/time-deposit")
+    public ResponseEntity<AccountResponse> openTimeDepositAccount(@RequestParam String ownerId,
+                                                                    @Valid @RequestBody OpenTimeDepositAccountRequest request) {
+        var account = openTimeDeposit.openTimeDeposit(new OpenTimeDepositAccountUseCase.Command(
+                CustomerId.of(ownerId), request.currency(),
+                Money.of(request.principal(), request.currency()),
+                request.maturityDate(), request.annualInterestRate()));
         return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(account));
     }
 
