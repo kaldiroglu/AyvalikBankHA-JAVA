@@ -71,7 +71,7 @@ class AccountApplicationServiceTest {
     @Test
     void shouldDepositMoneyToAccount() {
         CustomerId ownerId = CustomerId.generate();
-        Account account = Account.open(ownerId, Currency.USD);
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
         AccountId accountId = account.getId();
         when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -96,8 +96,8 @@ class AccountApplicationServiceTest {
     @Test
     void shouldTransferBetweenAccountsOfSameCustomerFreeOfCharge() {
         CustomerId ownerId = CustomerId.generate();
-        Account source = Account.open(ownerId, Currency.USD);
-        Account target = Account.open(ownerId, Currency.USD);
+        Account source = CheckingAccount.open(ownerId, Currency.USD);
+        Account target = CheckingAccount.open(ownerId, Currency.USD);
         source.deposit(Money.of(500.0, Currency.USD));
 
         when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
@@ -118,8 +118,8 @@ class AccountApplicationServiceTest {
     void shouldDeductFeeForTransferBetweenDifferentCustomers() {
         CustomerId owner1 = CustomerId.generate();
         CustomerId owner2 = CustomerId.generate();
-        Account source = Account.open(owner1, Currency.USD);
-        Account target = Account.open(owner2, Currency.USD);
+        Account source = CheckingAccount.open(owner1, Currency.USD);
+        Account target = CheckingAccount.open(owner2, Currency.USD);
         source.deposit(Money.of(1000.0, Currency.USD));
 
         when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
@@ -141,7 +141,7 @@ class AccountApplicationServiceTest {
     @Test
     void shouldFreezeAccount() {
         CustomerId ownerId = CustomerId.generate();
-        Account account = Account.open(ownerId, Currency.USD);
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -154,7 +154,7 @@ class AccountApplicationServiceTest {
     @Test
     void shouldUnfreezeAccount() {
         CustomerId ownerId = CustomerId.generate();
-        Account account = Account.open(ownerId, Currency.USD);
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
         account.freeze();
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -167,7 +167,7 @@ class AccountApplicationServiceTest {
     @Test
     void shouldCloseAccount() {
         CustomerId ownerId = CustomerId.generate();
-        Account account = Account.open(ownerId, Currency.USD);
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -179,7 +179,7 @@ class AccountApplicationServiceTest {
     @Test
     void shouldThrowAccountNotOperableWhenFreezingClosedAccount() {
         CustomerId ownerId = CustomerId.generate();
-        Account account = Account.open(ownerId, Currency.USD);
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
         account.close();
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
 
@@ -199,7 +199,7 @@ class AccountApplicationServiceTest {
     @Test
     void shouldThrowOnWithdrawExceedingBalance() {
         CustomerId ownerId = CustomerId.generate();
-        Account account = Account.open(ownerId, Currency.USD);
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
         account.deposit(Money.of(100.0, Currency.USD));
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
 

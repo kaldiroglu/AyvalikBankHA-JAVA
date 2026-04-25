@@ -8,8 +8,6 @@ public record Money(BigDecimal amount, Currency currency) {
     public Money {
         if (amount == null) throw new IllegalArgumentException("Amount must not be null");
         if (currency == null) throw new IllegalArgumentException("Currency must not be null");
-        if (amount.compareTo(BigDecimal.ZERO) < 0)
-            throw new IllegalArgumentException("Amount cannot be negative");
         amount = amount.setScale(2, RoundingMode.HALF_UP);
     }
 
@@ -32,9 +30,11 @@ public record Money(BigDecimal amount, Currency currency) {
 
     public Money subtract(Money other) {
         requireSameCurrency(other);
-        if (this.amount.compareTo(other.amount) < 0)
-            throw new IllegalArgumentException("Insufficient funds: cannot subtract " + other.amount + " from " + this.amount);
         return new Money(this.amount.subtract(other.amount), this.currency);
+    }
+
+    public Money negate() {
+        return new Money(this.amount.negate(), this.currency);
     }
 
     public Money multiply(BigDecimal factor) {
@@ -44,6 +44,10 @@ public record Money(BigDecimal amount, Currency currency) {
     public boolean isGreaterThanOrEqualTo(Money other) {
         requireSameCurrency(other);
         return this.amount.compareTo(other.amount) >= 0;
+    }
+
+    public boolean isNegative() {
+        return this.amount.signum() < 0;
     }
 
     private void requireSameCurrency(Money other) {

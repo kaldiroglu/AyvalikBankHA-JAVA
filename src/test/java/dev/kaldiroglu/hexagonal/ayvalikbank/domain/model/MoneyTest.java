@@ -16,10 +16,10 @@ class MoneyTest {
     }
 
     @Test
-    void shouldRejectNegativeAmount() {
-        assertThatThrownBy(() -> Money.of(-1.0, Currency.EUR))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("negative");
+    void shouldAllowNegativeAmount() {
+        Money money = Money.of(-50.0, Currency.EUR);
+        assertThat(money.amount()).isEqualByComparingTo("-50.00");
+        assertThat(money.isNegative()).isTrue();
     }
 
     @Test
@@ -46,12 +46,12 @@ class MoneyTest {
     }
 
     @Test
-    void shouldRejectSubtractingMoreThanAvailable() {
+    void shouldSubtractLargerFromSmallerReturningNegative() {
         Money a = Money.of(50.0, Currency.USD);
         Money b = Money.of(100.0, Currency.USD);
-        assertThatThrownBy(() -> a.subtract(b))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Insufficient");
+        Money result = a.subtract(b);
+        assertThat(result.amount()).isEqualByComparingTo("-50.00");
+        assertThat(result.isNegative()).isTrue();
     }
 
     @Test
@@ -59,5 +59,20 @@ class MoneyTest {
         Money zero = Money.zero(Currency.EUR);
         assertThat(zero.amount()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(zero.currency()).isEqualTo(Currency.EUR);
+    }
+
+    @Test
+    void shouldNegatePositiveMoney() {
+        Money positive = Money.of(75.0, Currency.USD);
+        Money negated = positive.negate();
+        assertThat(negated.amount()).isEqualByComparingTo("-75.00");
+        assertThat(negated.isNegative()).isTrue();
+    }
+
+    @Test
+    void shouldRejectNullAmount() {
+        assertThatThrownBy(() -> Money.of(null, Currency.USD))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("null");
     }
 }

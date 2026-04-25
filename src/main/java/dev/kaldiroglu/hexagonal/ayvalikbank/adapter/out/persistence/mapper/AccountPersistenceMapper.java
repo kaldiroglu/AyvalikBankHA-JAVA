@@ -11,12 +11,13 @@ public class AccountPersistenceMapper {
         Currency currency = Currency.valueOf(entity.getCurrency());
         Money balance = Money.of(entity.getBalance(), currency);
         AccountStatus status = AccountStatus.valueOf(entity.getStatus());
-        return new Account(
+        return new CheckingAccount(
                 AccountId.of(entity.getId()),
                 CustomerId.of(entity.getOwnerId()),
                 currency,
                 balance,
-                status
+                status,
+                Money.zero(currency)
         );
     }
 

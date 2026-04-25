@@ -136,7 +136,7 @@ class AccountTest {
 
 
     private Account openUsdAccount() {
-        return Account.open(CustomerId.generate(), Currency.USD);
+        return CheckingAccount.open(CustomerId.generate(), Currency.USD);
     }
 
     @Test

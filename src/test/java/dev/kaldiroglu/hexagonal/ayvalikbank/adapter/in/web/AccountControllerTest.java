@@ -41,7 +41,7 @@ class AccountControllerTest {
     // ── helpers ───────────────────────────────────────────────────────────
 
     private static Account usdAccount(CustomerId ownerId) {
-        return Account.open(ownerId, Currency.USD);
+        return CheckingAccount.open(ownerId, Currency.USD);
     }
 
     private static Transaction depositTx(AccountId accountId) {
@@ -100,7 +100,7 @@ class AccountControllerTest {
     void listAccounts_returnsOkWithList() throws Exception {
         CustomerId ownerId = CustomerId.generate();
         when(listAccounts.listAccounts(any())).thenReturn(List.of(
-                usdAccount(ownerId), Account.open(ownerId, Currency.EUR)));
+                usdAccount(ownerId), CheckingAccount.open(ownerId, Currency.EUR)));
 
         mockMvc.perform(get("/api/customers/{id}/accounts", ownerId.value()))
                 .andExpect(status().isOk())

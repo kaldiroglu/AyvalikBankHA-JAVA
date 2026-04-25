@@ -1,15 +1,15 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.domain.model;
 
-import java.math.BigDecimal;
+public sealed abstract class Account
+        permits CheckingAccount, SavingsAccount, TimeDepositAccount {
 
-public class Account {
-    private final AccountId id;
-    private final CustomerId ownerId;
-    private final Currency currency;
-    private Money balance;
-    private AccountStatus status;
+    protected final AccountId id;
+    protected final CustomerId ownerId;
+    protected final Currency currency;
+    protected Money balance;
+    protected AccountStatus status;
 
-    public Account(AccountId id, CustomerId ownerId, Currency currency, Money balance, AccountStatus status) {
+    protected Account(AccountId id, CustomerId ownerId, Currency currency, Money balance, AccountStatus status) {
         if (!balance.currency().equals(currency))
             throw new IllegalArgumentException("Balance currency must match account currency");
         this.id = id;
@@ -19,13 +19,11 @@ public class Account {
         this.status = status;
     }
 
-    public static Account open(CustomerId ownerId, Currency currency) {
-        return new Account(AccountId.generate(), ownerId, currency, Money.zero(currency), AccountStatus.ACTIVE);
-    }
+    public abstract AccountType type();
 
-    // ── Status transitions ────────────────────────────────────────────────
+    // ── Status transitions (shared, final) ────────────────────────────────
 
-    public void freeze() {
+    public final void freeze() {
         if (status == AccountStatus.CLOSED)
             throw new IllegalStateException("Cannot freeze a closed account");
         if (status == AccountStatus.FROZEN)
@@ -33,7 +31,7 @@ public class Account {
         this.status = AccountStatus.FROZEN;
     }
 
-    public void unfreeze() {
+    public final void unfreeze() {
         if (status == AccountStatus.CLOSED)
             throw new IllegalStateException("Cannot unfreeze a closed account");
         if (status == AccountStatus.ACTIVE)
@@ -41,60 +39,39 @@ public class Account {
         this.status = AccountStatus.ACTIVE;
     }
 
-    public void close() {
+    public final void close() {
         if (status == AccountStatus.CLOSED)
             throw new IllegalStateException("Account is already closed");
         this.status = AccountStatus.CLOSED;
     }
 
-    // ── Operations (all require ACTIVE status) ────────────────────────────
+    // ── Operations: each subtype overrides ────────────────────────────────
 
-    public Transaction deposit(Money amount) {
-        requireActive();
-        if (!amount.currency().equals(this.currency))
-            throw new IllegalArgumentException("Deposit currency " + amount.currency() + " does not match account currency " + this.currency);
-        this.balance = this.balance.add(amount);
-        return Transaction.create(this.id, TransactionType.DEPOSIT, amount, "Deposit");
-    }
+    public abstract Transaction deposit(Money amount);
 
-    public Transaction withdraw(Money amount) {
-        requireActive();
-        if (!amount.currency().equals(this.currency))
-            throw new IllegalArgumentException("Withdrawal currency " + amount.currency() + " does not match account currency " + this.currency);
-        if (!this.balance.isGreaterThanOrEqualTo(amount))
-            throw new IllegalArgumentException("Insufficient funds");
-        this.balance = this.balance.subtract(amount);
-        return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount, "Withdrawal");
-    }
+    public abstract Transaction withdraw(Money amount);
 
-    public Transaction transferOut(Money amount, Money fee, String targetAccountId) {
-        requireActive();
-        if (!amount.currency().equals(this.currency))
-            throw new IllegalArgumentException("Transfer currency does not match account currency");
-        Money totalDebit = fee.amount().compareTo(BigDecimal.ZERO) > 0 ? amount.add(fee) : amount;
-        if (!this.balance.isGreaterThanOrEqualTo(totalDebit))
-            throw new IllegalArgumentException("Insufficient funds for transfer including fee");
-        this.balance = this.balance.subtract(totalDebit);
-        String desc = "Transfer out to account " + targetAccountId +
-                (fee.amount().compareTo(BigDecimal.ZERO) > 0 ? " (fee: " + fee + ")" : "");
-        return Transaction.create(this.id, TransactionType.TRANSFER_OUT, amount, desc);
-    }
+    public abstract Transaction transferOut(Money amount, Money fee, String targetAccountId);
 
-    public Transaction transferIn(Money amount, String sourceAccountId) {
+    public final Transaction transferIn(Money amount, String sourceAccountId) {
         requireActive();
-        if (!amount.currency().equals(this.currency))
-            throw new IllegalArgumentException("Transfer currency does not match account currency");
+        requireSameCurrency(amount);
         this.balance = this.balance.add(amount);
         return Transaction.create(this.id, TransactionType.TRANSFER_IN, amount, "Transfer in from account " + sourceAccountId);
     }
 
-    // ── Guard ─────────────────────────────────────────────────────────────
+    // ── Guards (visible to subclasses) ────────────────────────────────────
 
-    private void requireActive() {
+    protected final void requireActive() {
         if (status == AccountStatus.FROZEN)
             throw new IllegalStateException("Account is frozen");
         if (status == AccountStatus.CLOSED)
             throw new IllegalStateException("Account is closed");
+    }
+
+    protected final void requireSameCurrency(Money amount) {
+        if (!amount.currency().equals(this.currency))
+            throw new IllegalArgumentException("Currency " + amount.currency() + " does not match account currency " + this.currency);
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────

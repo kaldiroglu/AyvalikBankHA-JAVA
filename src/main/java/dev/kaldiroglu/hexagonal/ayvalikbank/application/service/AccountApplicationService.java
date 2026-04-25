@@ -51,7 +51,7 @@ public class AccountApplicationService implements
     public Account createAccount(CreateAccountUseCase.Command command) {
         if (!customerRepository.existsById(command.ownerId()))
             throw new CustomerNotFoundException("Customer not found: " + command.ownerId());
-        Account account = Account.open(command.ownerId(), command.currency());
+        Account account = CheckingAccount.open(command.ownerId(), command.currency());
         return accountRepository.save(account);
     }
 
