@@ -562,3 +562,94 @@ The negative communication tests (`verifyNoInteractions`) are important here —
 **`shouldDepositAndIncreaseBalance` mixes state and output correctly**: asserting both the returned `Transaction` and the updated balance is appropriate since both are part of the operation's contract. Not a problem — just worth noting it spans two styles intentionally.
 
 **Domain model tests have no communication tests**: correct, because `Account`, `Customer`, and `Money` have no collaborators. Introducing mocks there would be a design smell.
+
+---
+
+## Coverage Analysis
+
+Coverage was measured with **JaCoCo 0.8.13** on Java 25, produced by `mvn verify`. The raw data comes from `target/site/jacoco/jacoco.csv`. Test classes themselves are excluded from all figures.
+
+---
+
+### Coverage Techniques
+
+JaCoCo measures five dimensions simultaneously. Each answers a different question about how thoroughly the tests exercise the production code.
+
+| Technique | Granularity | Question answered |
+|-----------|-------------|------------------|
+| **Instruction** | JVM bytecode instruction | Has this specific bytecode instruction been executed? |
+| **Branch** | Boolean decision outcome | Has each true/false arm of every `if`, `switch`, and ternary been taken? |
+| **Line** | Source line | Has at least one instruction on this line been reached? |
+| **Cyclomatic Complexity** | Execution path | How many of the linearly independent paths through each method have been traversed? |
+| **Method** | Method body | Has this method been entered at all? |
+
+**Why they differ:**
+
+- A single test can cover a *line* while missing one *branch* of the condition on that line — this is why branch coverage is always ≤ line coverage.
+- A method with 5 branches has cyclomatic complexity 6; full complexity coverage requires at least 6 distinct tests exercising every path combination, so it is the hardest metric to saturate.
+- *Instruction coverage* is the most precise: it operates below the source level and catches dead code inside a single statement that line coverage would mark green.
+- *Method coverage* is the most forgiving: a method with 50 lines counts the same as one with 2. Low method coverage signals that whole entry points are never reached.
+
+---
+
+### Overall Summary
+
+| Technique | Covered | Total | Coverage |
+|-----------|---------|-------|----------|
+| Instruction | 1,810 | 2,799 | **64.7%** |
+| Branch | 78 | 102 | **76.5%** |
+| Line | 392 | 619 | **63.3%** |
+| Complexity | 175 | 303 | **57.8%** |
+| Method | 143 | 252 | **56.7%** |
+
+These headline numbers are pulled down substantially by the outbound persistence layer (persistence adapters, mappers, JPA entities) which sits at **0%** across all metrics by design — no integration test exercises a real database. Filtering that layer out gives a much more representative picture of intentionally tested code.
+
+---
+
+### By Architectural Layer
+
+| Layer | Instruction | Branch | Line | Method |
+|-------|-------------|--------|------|--------|
+| **Domain** (model + services) | 809 / 898 → **90.1%** | 69 / 82 → **84.1%** | 175 / 185 → **94.6%** | 62 / 66 → **93.9%** |
+| **Application services** | 324 / 412 → **78.6%** | 8 / 12 → **66.7%** | 79 / 97 → **81.4%** | 16 / 22 → **72.7%** |
+| **Web adapters** (controllers + DTOs + GEH) | 494 / 507 → **97.4%** | 1 / 2 → **50.0%** | 104 / 106 → **98.1%** | 42 / 44 → **95.5%** |
+| **Ports In** (Command records) | 66 / 66 → **100%** | — | 7 / 7 → **100%** | 7 / 7 → **100%** |
+| **Config** (SecurityConfig + initializers) | 90 / 213 → **42.3%** | 0 / 4 → **0.0%** | 19 / 49 → **38.8%** | 9 / 17 → **52.9%** |
+| **Outbound adapters + security** | 0 / 667 → **0.0%** | 0 / 2 → **0.0%** | 0 / 164 → **0.0%** | 0 / 87 → **0.0%** |
+
+---
+
+### Class-Level Detail
+
+| Class | Instruction | Branch | Line | Method |
+|-------|-------------|--------|------|--------|
+| `Account` | 259 / 290 → **89.3%** | 27 / 32 → **84.4%** | 58 / 63 → **92.1%** | 15 / 15 → **100%** |
+| `Customer` | 96 / 96 → **100%** | 2 / 2 → **100%** | 24 / 24 → **100%** | 10 / 10 → **100%** |
+| `Money` | 130 / 153 → **85.0%** | 10 / 12 → **83.3%** | 22 / 23 → **95.7%** | 9 / 10 → **90.0%** |
+| `PasswordValidationService` | 103 / 103 → **100%** | 23 / 24 → **95.8%** | 17 / 17 → **100%** | 2 / 2 → **100%** |
+| `TransferDomainService` | 24 / 24 → **100%** | 2 / 2 → **100%** | 7 / 7 → **100%** | 2 / 2 → **100%** |
+| `CustomerApplicationService` | 128 / 156 → **82.1%** | 6 / 8 → **75.0%** | 32 / 37 → **86.5%** | 6 / 9 → **66.7%** |
+| `AccountApplicationService` | 196 / 256 → **76.6%** | 2 / 4 → **50.0%** | 47 / 60 → **78.3%** | 10 / 13 → **76.9%** |
+| `GlobalExceptionHandler` | 60 / 73 → **82.2%** | 1 / 2 → **50.0%** | 11 / 13 → **84.6%** | 10 / 12 → **83.3%** |
+| `AccountController` | 136 / 136 → **100%** | — | 31 / 31 → **100%** | 8 / 8 → **100%** |
+| `AdminController` | 97 / 97 → **100%** | — | 26 / 26 → **100%** | 8 / 8 → **100%** |
+| `CustomerPersistenceAdapter` | 0 / 75 → **0%** | — | 0 / 13 → **0%** | 0 / 7 → **0%** |
+| `BCryptPasswordHasherAdapter` | 0 / 20 → **0%** | — | 0 / 4 → **0%** | 0 / 3 → **0%** |
+
+Controllers show no branch data because their routing logic carries no explicit conditionals — all branching happens at the Spring dispatcher level or inside the use cases.
+
+---
+
+### Key Observations
+
+**The domain layer is the best-covered layer (90.1% instruction).** This is the right outcome for hexagonal architecture: the core business logic lives in pure Java with no infrastructure dependencies, so unit tests can reach it directly without any mocking of the environment. `Customer`, `TransferDomainService`, and `PasswordValidationService` all reach 100% instruction and line coverage.
+
+**Branch coverage consistently lags instruction and line coverage by 10–15 percentage points.** This is the normal pattern: a single test reaching a line marks it covered even if only one arm of its condition is exercised. `AccountApplicationService` shows this most starkly — 78% line but only 50% branch — because the same-customer/different-customer conditional inside the transfer flow is exercised in both directions by only two tests, but the error-path branches (e.g. source account missing a balance check) are not fully driven from both sides.
+
+**Web adapters achieve 97–98% line coverage** because every controller method has at least one `@WebMvcTest` case and every request/response DTO is instantiated in the process. The 50% branch figure for the layer is entirely due to `GlobalExceptionHandler`, which has one handler method (`handleUnauthorizedAccess`) that Spring Security intercepts before the exception can reach the handler in the `@WebMvcTest` slice.
+
+**Cyclomatic complexity coverage (57.8%) is the lowest metric overall** and the most meaningful signal of path-testing gaps. A method with complexity N needs N tests to cover every independent path. The application service methods each have complexity 4–11 but only 3–6 tests, meaning some path combinations remain untested.
+
+**The outbound persistence layer is intentionally at 0%.** `CustomerPersistenceAdapter`, `AccountPersistenceAdapter`, `TransactionPersistenceAdapter`, `SettingsPersistenceAdapter`, their three mappers, five JPA entities, and `BCryptPasswordHasherAdapter` have no test coverage. Closing this gap requires integration tests that boot a real database — for example with Testcontainers using the PostgreSQL image from `docker-compose.yml`.
+
+**Three application service methods are uncovered (method coverage 72.7%).** `CustomerApplicationService` has three methods, one of which (`listCustomers`) is never invoked in the service tests (it is tested only through the controller slice). `AccountApplicationService` is missing three methods — `listAccounts`, `getBalance`, and `getTransactions` — from its own unit test class, each exercised only at the controller layer.

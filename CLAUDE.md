@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Ayvalık Bank CC-1** — a hexagonal-architecture banking application in Java 25 / Spring Boot 3.4.
+**Ayvalık Bank HA-1** — a hexagonal-architecture banking application in Java 25 / Spring Boot 3.4.
 
 ## Commands
 
