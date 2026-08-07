@@ -36,7 +36,7 @@ class SavingsAccountTest {
         SavingsAccount account = openUsdSavings("0.03");
         account.deposit(Money.of(100.0, Currency.USD));
         assertThatThrownBy(() -> account.withdraw(Money.of(101.0, Currency.USD)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("Insufficient");
     }
 

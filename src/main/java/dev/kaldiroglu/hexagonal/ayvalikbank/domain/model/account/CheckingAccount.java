@@ -75,8 +75,8 @@ public final class CheckingAccount extends Account {
         Money lowerBound = overdraftLimit.negate();
         if (projected.amount().compareTo(lowerBound.amount()) < 0) {
             if (overdraftLimit.isZero())
-                throw new IllegalArgumentException("Insufficient funds");
-            throw new IllegalArgumentException("Withdrawal exceeds overdraft limit");
+                throw new InsufficientBalanceException("Insufficient funds");
+            throw new InsufficientBalanceException("Withdrawal exceeds overdraft limit");
         }
         this.balance = projected;
         return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount, "Withdrawal");
@@ -93,8 +93,8 @@ public final class CheckingAccount extends Account {
         Money lowerBound = overdraftLimit.negate();
         if (projected.amount().compareTo(lowerBound.amount()) < 0) {
             if (overdraftLimit.isZero())
-                throw new IllegalArgumentException("Insufficient funds for transfer including fee");
-            throw new IllegalArgumentException("Transfer exceeds overdraft limit");
+                throw new InsufficientBalanceException("Insufficient funds for transfer including fee");
+            throw new InsufficientBalanceException("Transfer exceeds overdraft limit");
         }
         this.balance = projected;
         String desc = "Transfer out to account " + targetAccountId +

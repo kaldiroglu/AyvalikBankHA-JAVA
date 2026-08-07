@@ -171,7 +171,7 @@ class AccountTest {
         Account account = openUsdAccount();
         account.deposit(Money.of(100.0, Currency.USD));
         assertThatThrownBy(() -> account.withdraw(Money.of(200.0, Currency.USD)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("Insufficient");
     }
 

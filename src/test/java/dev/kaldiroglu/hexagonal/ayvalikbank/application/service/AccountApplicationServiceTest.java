@@ -3,6 +3,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.LimitExceededException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
@@ -248,7 +249,7 @@ class AccountApplicationServiceTest {
 
         assertThatThrownBy(() -> service.withdraw(
                 new WithdrawMoneyUseCase.Command(account.getId(), Money.of(500.0, Currency.USD))))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InsufficientFundsException.class)
                 .hasMessageContaining("Insufficient");
     }
 

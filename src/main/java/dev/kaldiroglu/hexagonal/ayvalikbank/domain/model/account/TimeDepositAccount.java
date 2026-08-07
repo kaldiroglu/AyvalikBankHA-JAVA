@@ -134,7 +134,7 @@ public final class TimeDepositAccount extends Account {
         if (amount.isNegative())
             throw new IllegalArgumentException("Withdrawal amount cannot be negative");
         if (!this.balance.isGreaterThanOrEqualTo(amount))
-            throw new IllegalArgumentException("Insufficient funds");
+            throw new InsufficientBalanceException("Insufficient funds");
         this.balance = this.balance.subtract(amount);
         return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount, "Withdrawal");
     }

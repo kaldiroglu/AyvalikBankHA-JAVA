@@ -30,7 +30,7 @@ class CheckingAccountTest {
         CheckingAccount account = CheckingAccount.open(
                 CustomerId.generate(), Currency.USD, Money.of(50.0, Currency.USD));
         assertThatThrownBy(() -> account.withdraw(Money.of(60.0, Currency.USD)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("overdraft");
     }
 
@@ -39,7 +39,7 @@ class CheckingAccountTest {
         CheckingAccount account = CheckingAccount.open(CustomerId.generate(), Currency.USD);
         account.deposit(Money.of(50.0, Currency.USD));
         assertThatThrownBy(() -> account.withdraw(Money.of(60.0, Currency.USD)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("Insufficient");
     }
 }

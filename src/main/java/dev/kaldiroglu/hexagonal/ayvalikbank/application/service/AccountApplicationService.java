@@ -3,6 +3,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.LimitExceededException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
@@ -105,6 +106,8 @@ public class AccountApplicationService implements
         Transaction tx;
         try {
             tx = account.withdraw(command.amount());
+        } catch (InsufficientBalanceException e) {
+            throw new InsufficientFundsException(e.getMessage());
         } catch (IllegalStateException e) {
             throw new InvalidAccountOperationException(e.getMessage());
         }
@@ -145,6 +148,8 @@ public class AccountApplicationService implements
         try {
             outTx = source.transferOut(command.amount(), fee, target.getId().toString());
             inTx = target.transferIn(command.amount(), source.getId().toString());
+        } catch (InsufficientBalanceException e) {
+            throw new InsufficientFundsException(e.getMessage());
         } catch (IllegalStateException e) {
             throw new InvalidAccountOperationException(e.getMessage());
         }

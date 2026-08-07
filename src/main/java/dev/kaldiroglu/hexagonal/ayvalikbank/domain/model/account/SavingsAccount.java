@@ -82,7 +82,7 @@ public final class SavingsAccount extends Account {
         if (amount.isNegative())
             throw new IllegalArgumentException("Withdrawal amount cannot be negative");
         if (!this.balance.isGreaterThanOrEqualTo(amount))
-            throw new IllegalArgumentException("Insufficient funds");
+            throw new InsufficientBalanceException("Insufficient funds");
         this.balance = this.balance.subtract(amount);
         return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount, "Withdrawal");
     }
@@ -95,7 +95,7 @@ public final class SavingsAccount extends Account {
             throw new IllegalArgumentException("Transfer amount cannot be negative");
         Money totalDebit = fee.isZero() ? amount : amount.add(fee);
         if (!this.balance.isGreaterThanOrEqualTo(totalDebit))
-            throw new IllegalArgumentException("Insufficient funds for transfer including fee");
+            throw new InsufficientBalanceException("Insufficient funds for transfer including fee");
         this.balance = this.balance.subtract(totalDebit);
         String desc = "Transfer out to account " + targetAccountId +
                 (fee.isZero() ? "" : " (fee: " + fee + ")");
