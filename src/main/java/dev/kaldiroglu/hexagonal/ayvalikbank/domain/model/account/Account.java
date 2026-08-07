@@ -132,6 +132,19 @@ public sealed abstract class Account
 
     // ── Accessors ─────────────────────────────────────────────────────────
 
+    /**
+     * Whether this account belongs to the given customer.
+     *
+     * <p>The domain owns this <i>fact</i>; it does not own the <i>policy</i> built on top of it.
+     * Deciding that a caller may therefore not proceed is an application concern — a "caller" is a
+     * session notion the domain has no business knowing about, and keeping it out is what lets this
+     * method be tested with two plain {@link CustomerId} values and no security framework at all.
+     * See {@code Refactorings.md} entry 3.
+     */
+    public final boolean isOwnedBy(CustomerId customerId) {
+        return this.ownerId.equals(customerId);
+    }
+
     public AccountId getId() { return id; }
     public CustomerId getOwnerId() { return ownerId; }
     public Currency getCurrency() { return currency; }

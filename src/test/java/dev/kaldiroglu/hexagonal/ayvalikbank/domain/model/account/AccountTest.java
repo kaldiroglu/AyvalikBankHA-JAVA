@@ -198,4 +198,21 @@ class AccountTest {
         assertThat(account.getBalance().amount()).isEqualByComparingTo("300.00");
     }
 
+    // ── ownership ─────────────────────────────────────────────────────────
+
+    @Test
+    void shouldReportOwnershipForTheOwningCustomer() {
+        CustomerId owner = CustomerId.generate();
+        Account account = CheckingAccount.open(owner, Currency.USD);
+
+        assertThat(account.isOwnedBy(owner)).isTrue();
+    }
+
+    @Test
+    void shouldDenyOwnershipForAnotherCustomer() {
+        Account account = CheckingAccount.open(CustomerId.generate(), Currency.USD);
+
+        assertThat(account.isOwnedBy(CustomerId.generate())).isFalse();
+    }
+
 }
