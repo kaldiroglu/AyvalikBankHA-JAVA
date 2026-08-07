@@ -34,8 +34,8 @@ class SavingsAccountTest {
     @Test
     void shouldRejectWithdrawalThatWouldOverdraw() {
         SavingsAccount account = openUsdSavings("0.03");
-        account.deposit(Money.of(100.0, Currency.USD));
-        assertThatThrownBy(() -> account.withdraw(Money.of(101.0, Currency.USD)))
+        account.deposit(TransactionAmount.of(100.0, Currency.USD));
+        assertThatThrownBy(() -> account.withdraw(TransactionAmount.of(101.0, Currency.USD)))
                 .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("Insufficient");
     }
@@ -43,7 +43,7 @@ class SavingsAccountTest {
     @Test
     void shouldAccrueInterestForAMonth() {
         SavingsAccount account = openUsdSavings("0.12"); // 1% per month
-        account.deposit(Money.of(1000.0, Currency.USD));
+        account.deposit(TransactionAmount.of(1000.0, Currency.USD));
         Transaction tx = account.accrueInterest(YearMonth.of(2026, 4));
         assertThat(tx.getType()).isEqualTo(TransactionType.INTEREST);
         assertThat(tx.getAmount().amount()).isEqualByComparingTo("10.00");
@@ -54,7 +54,7 @@ class SavingsAccountTest {
     @Test
     void shouldAccrueInterestEvenWhenFrozen() {
         SavingsAccount account = openUsdSavings("0.12");
-        account.deposit(Money.of(1000.0, Currency.USD));
+        account.deposit(TransactionAmount.of(1000.0, Currency.USD));
         account.freeze();
         Transaction tx = account.accrueInterest(YearMonth.of(2026, 4));
         assertThat(tx.getAmount().amount()).isEqualByComparingTo("10.00");
@@ -72,7 +72,7 @@ class SavingsAccountTest {
     @Test
     void shouldRejectDoubleAccrualForSameMonth() {
         SavingsAccount account = openUsdSavings("0.12");
-        account.deposit(Money.of(1000.0, Currency.USD));
+        account.deposit(TransactionAmount.of(1000.0, Currency.USD));
         account.accrueInterest(YearMonth.of(2026, 4));
         assertThatThrownBy(() -> account.accrueInterest(YearMonth.of(2026, 4)))
                 .isInstanceOf(IllegalStateException.class)

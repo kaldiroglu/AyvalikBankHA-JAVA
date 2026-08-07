@@ -24,7 +24,7 @@ import java.time.temporal.ChronoUnit;
  *       which credits the accrued interest to the balance and unlocks withdrawal.
  * </ul>
  *
- * <p>Once matured, the account behaves like a regular cash balance: {@link #withdraw(Money)}
+ * <p>Once matured, the account behaves like a regular cash balance: {@link #withdraw(TransactionAmount)}
  * is permitted, but deposits and outbound transfers remain rejected (the product itself
  * has reached the end of its life cycle).
  *
@@ -115,7 +115,7 @@ public final class TimeDepositAccount extends Account {
      * @throws IllegalStateException always
      */
     @Override
-    public Transaction deposit(Money amount) {
+    public Transaction deposit(TransactionAmount amount) {
         throw new IllegalStateException("Time deposit principal is locked — further deposits are not allowed");
     }
 
@@ -126,17 +126,15 @@ public final class TimeDepositAccount extends Account {
      * @throws IllegalStateException if the account is not active or has not matured
      */
     @Override
-    public Transaction withdraw(Money amount) {
+    public Transaction withdraw(TransactionAmount amount) {
         requireActive();
         if (!matured)
             throw new IllegalStateException("Time deposit has not matured");
         requireSameCurrency(amount);
-        if (amount.isNegative())
-            throw new IllegalArgumentException("Withdrawal amount cannot be negative");
-        if (!this.balance.isGreaterThanOrEqualTo(amount))
+        if (!this.balance.isGreaterThanOrEqualTo(amount.asMoney()))
             throw new InsufficientBalanceException("Insufficient funds");
-        this.balance = this.balance.subtract(amount);
-        return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount, "Withdrawal");
+        this.balance = this.balance.subtract(amount.asMoney());
+        return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount.asMoney(), "Withdrawal");
     }
 
     /**
@@ -147,13 +145,13 @@ public final class TimeDepositAccount extends Account {
      * @throws IllegalStateException always
      */
     @Override
-    public Transaction transferOut(Money amount, Money fee, String targetAccountId) {
+    public Transaction transferOut(TransactionAmount amount, Money fee, String targetAccountId) {
         throw new IllegalStateException("Time deposit accounts do not support transfers");
     }
 
     /**
      * Closes the term of the deposit and credits the accrued simple interest to the balance.
-     * After this call, {@link #withdraw(Money)} is permitted.
+     * After this call, {@link #withdraw(TransactionAmount)} is permitted.
      *
      * <p>Interest formula: {@code principal × annualInterestRate × (months between openedOn and maturityDate / 12)}.
      * Final rounding to 2 decimal places is applied by {@link Money#multiply(BigDecimal)}.

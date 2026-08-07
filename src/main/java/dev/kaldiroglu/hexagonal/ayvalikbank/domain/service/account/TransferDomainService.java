@@ -1,6 +1,7 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.account;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Money;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.TransactionAmount;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerTier;
 
 import java.math.BigDecimal;
@@ -13,28 +14,28 @@ import java.math.RoundingMode;
  */
 public class TransferDomainService {
 
-    public Money calculateFee(Money amount, boolean sameCustomer, BigDecimal feePercent, CustomerTier sourceTier) {
+    public Money calculateFee(TransactionAmount amount, boolean sameCustomer, BigDecimal feePercent, CustomerTier sourceTier) {
         if (sameCustomer) {
             return Money.zero(amount.currency());
         }
         BigDecimal scaledPercent = feePercent.multiply(sourceTier.feeMultiplier());
-        BigDecimal feeAmount = amount.amount()
+        BigDecimal feeAmount = amount.asMoney().amount()
                 .multiply(scaledPercent)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         return Money.of(feeAmount, amount.currency());
     }
 
-    public void requireTransferWithinLimit(Money amount, CustomerTier tier) {
+    public void requireTransferWithinLimit(TransactionAmount amount, CustomerTier tier) {
         tier.maxPerTransfer().ifPresent(cap -> {
-            if (amount.amount().compareTo(cap) > 0)
+            if (amount.asMoney().amount().compareTo(cap) > 0)
                 throw new IllegalStateException(
                         "Transfer amount " + amount + " exceeds " + tier + " tier limit of " + cap);
         });
     }
 
-    public void requireWithdrawalWithinLimit(Money amount, CustomerTier tier) {
+    public void requireWithdrawalWithinLimit(TransactionAmount amount, CustomerTier tier) {
         tier.maxPerWithdrawal().ifPresent(cap -> {
-            if (amount.amount().compareTo(cap) > 0)
+            if (amount.asMoney().amount().compareTo(cap) > 0)
                 throw new IllegalStateException(
                         "Withdrawal amount " + amount + " exceeds " + tier + " tier limit of " + cap);
         });

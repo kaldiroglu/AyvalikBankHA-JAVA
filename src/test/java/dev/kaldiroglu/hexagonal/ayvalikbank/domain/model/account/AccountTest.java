@@ -100,7 +100,7 @@ class AccountTest {
     void shouldRejectDepositOnFrozenAccount() {
         Account account = openUsdAccount();
         account.freeze();
-        assertThatThrownBy(() -> account.deposit(Money.of(100.0, Currency.USD)))
+        assertThatThrownBy(() -> account.deposit(TransactionAmount.of(100.0, Currency.USD)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("frozen");
     }
@@ -108,9 +108,9 @@ class AccountTest {
     @Test
     void shouldRejectWithdrawOnClosedAccount() {
         Account account = openUsdAccount();
-        account.deposit(Money.of(200.0, Currency.USD));
+        account.deposit(TransactionAmount.of(200.0, Currency.USD));
         account.close();
-        assertThatThrownBy(() -> account.withdraw(Money.of(50.0, Currency.USD)))
+        assertThatThrownBy(() -> account.withdraw(TransactionAmount.of(50.0, Currency.USD)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("closed");
     }
@@ -118,10 +118,10 @@ class AccountTest {
     @Test
     void shouldRejectTransferOutOnFrozenAccount() {
         Account account = openUsdAccount();
-        account.deposit(Money.of(500.0, Currency.USD));
+        account.deposit(TransactionAmount.of(500.0, Currency.USD));
         account.freeze();
         assertThatThrownBy(() -> account.transferOut(
-                Money.of(100.0, Currency.USD), Money.zero(Currency.USD), "target"))
+                TransactionAmount.of(100.0, Currency.USD), Money.zero(Currency.USD), "target"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("frozen");
     }
@@ -130,7 +130,7 @@ class AccountTest {
     void shouldRejectTransferInOnClosedAccount() {
         Account account = openUsdAccount();
         account.close();
-        assertThatThrownBy(() -> account.transferIn(Money.of(100.0, Currency.USD), "source"))
+        assertThatThrownBy(() -> account.transferIn(TransactionAmount.of(100.0, Currency.USD), "source"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("closed");
     }
@@ -151,7 +151,7 @@ class AccountTest {
     @Test
     void shouldDepositAndIncreaseBalance() {
         Account account = openUsdAccount();
-        Transaction tx = account.deposit(Money.of(500.0, Currency.USD));
+        Transaction tx = account.deposit(TransactionAmount.of(500.0, Currency.USD));
         assertThat(account.getBalance().amount()).isEqualByComparingTo("500.00");
         assertThat(tx.getType()).isEqualTo(TransactionType.DEPOSIT);
         assertThat(tx.getAmount().amount()).isEqualByComparingTo("500.00");
@@ -160,8 +160,8 @@ class AccountTest {
     @Test
     void shouldWithdrawAndDecreaseBalance() {
         Account account = openUsdAccount();
-        account.deposit(Money.of(500.0, Currency.USD));
-        Transaction tx = account.withdraw(Money.of(200.0, Currency.USD));
+        account.deposit(TransactionAmount.of(500.0, Currency.USD));
+        Transaction tx = account.withdraw(TransactionAmount.of(200.0, Currency.USD));
         assertThat(account.getBalance().amount()).isEqualByComparingTo("300.00");
         assertThat(tx.getType()).isEqualTo(TransactionType.WITHDRAWAL);
     }
@@ -169,8 +169,8 @@ class AccountTest {
     @Test
     void shouldRejectWithdrawalExceedingBalance() {
         Account account = openUsdAccount();
-        account.deposit(Money.of(100.0, Currency.USD));
-        assertThatThrownBy(() -> account.withdraw(Money.of(200.0, Currency.USD)))
+        account.deposit(TransactionAmount.of(100.0, Currency.USD));
+        assertThatThrownBy(() -> account.withdraw(TransactionAmount.of(200.0, Currency.USD)))
                 .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("Insufficient");
     }
@@ -178,7 +178,7 @@ class AccountTest {
     @Test
     void shouldRejectDepositWithWrongCurrency() {
         Account account = openUsdAccount();
-        assertThatThrownBy(() -> account.deposit(Money.of(100.0, Currency.EUR)))
+        assertThatThrownBy(() -> account.deposit(TransactionAmount.of(100.0, Currency.EUR)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("currency");
     }
@@ -186,15 +186,15 @@ class AccountTest {
     @Test
     void shouldTransferOutWithFeeDeducted() {
         Account account = openUsdAccount();
-        account.deposit(Money.of(1000.0, Currency.USD));
-        account.transferOut(Money.of(200.0, Currency.USD), Money.of(2.0, Currency.USD), "target-id");
+        account.deposit(TransactionAmount.of(1000.0, Currency.USD));
+        account.transferOut(TransactionAmount.of(200.0, Currency.USD), Money.of(2.0, Currency.USD), "target-id");
         assertThat(account.getBalance().amount()).isEqualByComparingTo("798.00");
     }
 
     @Test
     void shouldTransferInAndIncreaseBalance() {
         Account account = openUsdAccount();
-        account.transferIn(Money.of(300.0, Currency.USD), "source-id");
+        account.transferIn(TransactionAmount.of(300.0, Currency.USD), "source-id");
         assertThat(account.getBalance().amount()).isEqualByComparingTo("300.00");
     }
 

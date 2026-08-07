@@ -20,8 +20,8 @@ class CheckingAccountTest {
     void shouldWithdrawIntoOverdraftWhenLimitAllows() {
         CheckingAccount account = CheckingAccount.open(
                 CustomerId.generate(), Currency.USD, Money.of(100.0, Currency.USD));
-        account.deposit(Money.of(50.0, Currency.USD));
-        account.withdraw(Money.of(120.0, Currency.USD));
+        account.deposit(TransactionAmount.of(50.0, Currency.USD));
+        account.withdraw(TransactionAmount.of(120.0, Currency.USD));
         assertThat(account.getBalance().amount()).isEqualByComparingTo("-70.00");
     }
 
@@ -29,7 +29,7 @@ class CheckingAccountTest {
     void shouldRejectWithdrawalBeyondOverdraftLimit() {
         CheckingAccount account = CheckingAccount.open(
                 CustomerId.generate(), Currency.USD, Money.of(50.0, Currency.USD));
-        assertThatThrownBy(() -> account.withdraw(Money.of(60.0, Currency.USD)))
+        assertThatThrownBy(() -> account.withdraw(TransactionAmount.of(60.0, Currency.USD)))
                 .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("overdraft");
     }
@@ -37,8 +37,8 @@ class CheckingAccountTest {
     @Test
     void shouldRejectWithdrawalWhenNoOverdraftAndInsufficientFunds() {
         CheckingAccount account = CheckingAccount.open(CustomerId.generate(), Currency.USD);
-        account.deposit(Money.of(50.0, Currency.USD));
-        assertThatThrownBy(() -> account.withdraw(Money.of(60.0, Currency.USD)))
+        account.deposit(TransactionAmount.of(50.0, Currency.USD));
+        assertThatThrownBy(() -> account.withdraw(TransactionAmount.of(60.0, Currency.USD)))
                 .isInstanceOf(InsufficientBalanceException.class)
                 .hasMessageContaining("Insufficient");
     }

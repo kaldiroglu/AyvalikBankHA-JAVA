@@ -66,40 +66,34 @@ public final class SavingsAccount extends Account {
     public LocalDate getLastAccrualDate() { return lastAccrualDate; }
 
     @Override
-    public Transaction deposit(Money amount) {
+    public Transaction deposit(TransactionAmount amount) {
         requireActive();
         requireSameCurrency(amount);
-        if (amount.isNegative())
-            throw new IllegalArgumentException("Deposit amount cannot be negative");
-        this.balance = this.balance.add(amount);
-        return Transaction.create(this.id, TransactionType.DEPOSIT, amount, "Deposit");
+        this.balance = this.balance.add(amount.asMoney());
+        return Transaction.create(this.id, TransactionType.DEPOSIT, amount.asMoney(), "Deposit");
     }
 
     @Override
-    public Transaction withdraw(Money amount) {
+    public Transaction withdraw(TransactionAmount amount) {
         requireActive();
         requireSameCurrency(amount);
-        if (amount.isNegative())
-            throw new IllegalArgumentException("Withdrawal amount cannot be negative");
-        if (!this.balance.isGreaterThanOrEqualTo(amount))
+        if (!this.balance.isGreaterThanOrEqualTo(amount.asMoney()))
             throw new InsufficientBalanceException("Insufficient funds");
-        this.balance = this.balance.subtract(amount);
-        return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount, "Withdrawal");
+        this.balance = this.balance.subtract(amount.asMoney());
+        return Transaction.create(this.id, TransactionType.WITHDRAWAL, amount.asMoney(), "Withdrawal");
     }
 
     @Override
-    public Transaction transferOut(Money amount, Money fee, String targetAccountId) {
+    public Transaction transferOut(TransactionAmount amount, Money fee, String targetAccountId) {
         requireActive();
         requireSameCurrency(amount);
-        if (amount.isNegative())
-            throw new IllegalArgumentException("Transfer amount cannot be negative");
-        Money totalDebit = fee.isZero() ? amount : amount.add(fee);
+        Money totalDebit = fee.isZero() ? amount.asMoney() : amount.asMoney().add(fee);
         if (!this.balance.isGreaterThanOrEqualTo(totalDebit))
             throw new InsufficientBalanceException("Insufficient funds for transfer including fee");
         this.balance = this.balance.subtract(totalDebit);
         String desc = "Transfer out to account " + targetAccountId +
                 (fee.isZero() ? "" : " (fee: " + fee + ")");
-        return Transaction.create(this.id, TransactionType.TRANSFER_OUT, amount, desc);
+        return Transaction.create(this.id, TransactionType.TRANSFER_OUT, amount.asMoney(), desc);
     }
 
     /**

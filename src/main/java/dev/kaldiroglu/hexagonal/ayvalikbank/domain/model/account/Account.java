@@ -82,49 +82,50 @@ public sealed abstract class Account
 
     /**
      * Credits {@code amount} to the balance and returns a {@link TransactionType#DEPOSIT} record.
-     * Subtypes define which preconditions apply; e.g. {@link TimeDepositAccount#deposit(Money)}
+     * Subtypes define which preconditions apply; e.g. {@link TimeDepositAccount#deposit(TransactionAmount)}
      * always rejects.
      *
      * @throws IllegalStateException    if the subtype refuses (e.g. account not active, product locked)
-     * @throws IllegalArgumentException if the amount is negative or the currency does not match
+     * @throws IllegalArgumentException if the currency does not match (a negative amount cannot be constructed)
      */
-    public abstract Transaction deposit(Money amount);
+    public abstract Transaction deposit(TransactionAmount amount);
 
     /**
      * Debits {@code amount} from the balance and returns a {@link TransactionType#WITHDRAWAL} record.
      * Subtypes define overdraft and maturity rules. Callers must be ready to handle
      * {@link IllegalStateException} (e.g. {@link TimeDepositAccount} refuses until matured).
      */
-    public abstract Transaction withdraw(Money amount);
+    public abstract Transaction withdraw(TransactionAmount amount);
 
     /**
      * Outbound side of a transfer. Debits {@code amount + fee} from this account
      * and returns a {@link TransactionType#TRANSFER_OUT} record. The matching
-     * {@link #transferIn(Money, String)} runs on the target account.
+     * {@link #transferIn(TransactionAmount, String)} runs on the target account.
      *
      * @param fee             the transfer fee already calculated by {@code TransferDomainService} (may be zero)
      * @param targetAccountId the destination account's id (used only for the transaction description)
      * @throws IllegalStateException if this product does not support outbound transfers
      */
-    public abstract Transaction transferOut(Money amount, Money fee, String targetAccountId);
+    public abstract Transaction transferOut(TransactionAmount amount, Money fee, String targetAccountId);
 
     /**
      * Inbound side of a transfer. Credits {@code amount} to this account and records a
      * {@link TransactionType#TRANSFER_IN} transaction. Final because all account types behave
      * identically on the receiving end — the only requirement is that the account is active.
      */
-    public final Transaction transferIn(Money amount, String sourceAccountId) {
+    public final Transaction transferIn(TransactionAmount amount, String sourceAccountId) {
         requireActive();
         requireSameCurrency(amount);
-        this.balance = this.balance.add(amount);
-        return Transaction.create(this.id, TransactionType.TRANSFER_IN, amount, "Transfer in from account " + sourceAccountId);
+        this.balance = this.balance.add(amount.asMoney());
+        return Transaction.create(this.id, TransactionType.TRANSFER_IN, amount.asMoney(),
+                "Transfer in from account " + sourceAccountId);
     }
 
     // ── Guards (visible to subclasses) ────────────────────────────────────
 
     protected final void requireActive() { state.requireOperable(); }
 
-    protected final void requireSameCurrency(Money amount) {
+    protected final void requireSameCurrency(TransactionAmount amount) {
         if (!amount.currency().equals(this.currency))
             throw new IllegalArgumentException("Currency " + amount.currency() + " does not match account currency " + this.currency);
     }

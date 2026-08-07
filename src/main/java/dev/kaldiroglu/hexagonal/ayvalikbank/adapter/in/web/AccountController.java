@@ -7,6 +7,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.Transact
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.AccountId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Money;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.TransactionAmount;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
 import jakarta.validation.Valid;
@@ -96,7 +97,7 @@ public class AccountController {
     public ResponseEntity<TransactionResponse> deposit(@PathVariable String accountId,
                                                         @Valid @RequestBody MoneyOperationRequest request) {
         var tx = depositMoney.deposit(new DepositMoneyUseCase.Command(
-                AccountId.of(accountId), Money.of(request.amount(), request.currency())));
+                AccountId.of(accountId), TransactionAmount.of(request.amount(), request.currency())));
         return ResponseEntity.status(HttpStatus.CREATED).body(TransactionResponse.from(tx));
     }
 
@@ -104,7 +105,7 @@ public class AccountController {
     public ResponseEntity<TransactionResponse> withdraw(@PathVariable String accountId,
                                                          @Valid @RequestBody MoneyOperationRequest request) {
         var tx = withdrawMoney.withdraw(new WithdrawMoneyUseCase.Command(
-                AccountId.of(accountId), Money.of(request.amount(), request.currency())));
+                AccountId.of(accountId), TransactionAmount.of(request.amount(), request.currency())));
         return ResponseEntity.status(HttpStatus.CREATED).body(TransactionResponse.from(tx));
     }
 
@@ -114,7 +115,7 @@ public class AccountController {
         transferMoney.transfer(new TransferMoneyUseCase.Command(
                 AccountId.of(accountId),
                 AccountId.of(request.targetAccountId()),
-                Money.of(request.amount(), request.currency())));
+                TransactionAmount.of(request.amount(), request.currency())));
         return ResponseEntity.ok().build();
     }
 

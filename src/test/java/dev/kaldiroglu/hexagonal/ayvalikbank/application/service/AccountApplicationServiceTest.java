@@ -118,7 +118,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Transaction tx = service.deposit(new DepositMoneyUseCase.Command(accountId, Money.of(200.0, Currency.USD)));
+        Transaction tx = service.deposit(new DepositMoneyUseCase.Command(accountId, TransactionAmount.of(200.0, Currency.USD)));
 
         assertThat(tx.getType()).isEqualTo(TransactionType.DEPOSIT);
         assertThat(account.getBalance().amount()).isEqualByComparingTo("200.00");
@@ -130,7 +130,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deposit(
-                new DepositMoneyUseCase.Command(id, Money.of(100.0, Currency.USD))))
+                new DepositMoneyUseCase.Command(id, TransactionAmount.of(100.0, Currency.USD))))
                 .isInstanceOf(AccountNotFoundException.class);
     }
 
@@ -139,7 +139,7 @@ class AccountApplicationServiceTest {
         CustomerId ownerId = CustomerId.generate();
         Account source = CheckingAccount.open(ownerId, Currency.USD);
         Account target = CheckingAccount.open(ownerId, Currency.USD);
-        source.deposit(Money.of(500.0, Currency.USD));
+        source.deposit(TransactionAmount.of(500.0, Currency.USD));
 
         when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
         when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
@@ -149,7 +149,7 @@ class AccountApplicationServiceTest {
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.transfer(new TransferMoneyUseCase.Command(
-                source.getId(), target.getId(), Money.of(200.0, Currency.USD)));
+                source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // Same customer — no fee
         assertThat(source.getBalance().amount()).isEqualByComparingTo("300.00");
@@ -162,7 +162,7 @@ class AccountApplicationServiceTest {
         CustomerId owner2 = CustomerId.generate();
         Account source = CheckingAccount.open(owner1, Currency.USD);
         Account target = CheckingAccount.open(owner2, Currency.USD);
-        source.deposit(Money.of(1000.0, Currency.USD));
+        source.deposit(TransactionAmount.of(1000.0, Currency.USD));
 
         when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
         when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
@@ -172,7 +172,7 @@ class AccountApplicationServiceTest {
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.transfer(new TransferMoneyUseCase.Command(
-                source.getId(), target.getId(), Money.of(200.0, Currency.USD)));
+                source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // 200 transferred + 2 fee (1%) = 202 deducted from source
         assertThat(source.getBalance().amount()).isEqualByComparingTo("798.00");
@@ -243,12 +243,12 @@ class AccountApplicationServiceTest {
     void shouldThrowOnWithdrawExceedingBalance() {
         CustomerId ownerId = CustomerId.generate();
         Account account = CheckingAccount.open(ownerId, Currency.USD);
-        account.deposit(Money.of(100.0, Currency.USD));
+        account.deposit(TransactionAmount.of(100.0, Currency.USD));
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.withdraw(
-                new WithdrawMoneyUseCase.Command(account.getId(), Money.of(500.0, Currency.USD))))
+                new WithdrawMoneyUseCase.Command(account.getId(), TransactionAmount.of(500.0, Currency.USD))))
                 .isInstanceOf(InsufficientFundsException.class)
                 .hasMessageContaining("Insufficient");
     }
@@ -266,7 +266,7 @@ class AccountApplicationServiceTest {
         CustomerId owner2 = CustomerId.generate();
         Account source = CheckingAccount.open(owner1, Currency.USD);
         Account target = CheckingAccount.open(owner2, Currency.USD);
-        source.deposit(Money.of(1000.0, Currency.USD));
+        source.deposit(TransactionAmount.of(1000.0, Currency.USD));
 
         when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
         when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
@@ -276,7 +276,7 @@ class AccountApplicationServiceTest {
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.transfer(new TransferMoneyUseCase.Command(
-                source.getId(), target.getId(), Money.of(200.0, Currency.USD)));
+                source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // 1% × 0.5 multiplier × 200 = 1.00 fee → source debited 201.00
         assertThat(source.getBalance().amount()).isEqualByComparingTo("799.00");
@@ -288,14 +288,14 @@ class AccountApplicationServiceTest {
         CustomerId owner2 = CustomerId.generate();
         Account source = CheckingAccount.open(owner1, Currency.USD);
         Account target = CheckingAccount.open(owner2, Currency.USD);
-        source.deposit(Money.of(10000.0, Currency.USD));
+        source.deposit(TransactionAmount.of(10000.0, Currency.USD));
 
         when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
         when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
         when(customerRepository.findById(owner1)).thenReturn(Optional.of(stubCustomer(owner1, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.transfer(new TransferMoneyUseCase.Command(
-                source.getId(), target.getId(), Money.of(5001.0, Currency.USD))))
+                source.getId(), target.getId(), TransactionAmount.of(5001.0, Currency.USD))))
                 .isInstanceOf(LimitExceededException.class)
                 .hasMessageContaining("STANDARD");
     }
@@ -304,12 +304,12 @@ class AccountApplicationServiceTest {
     void shouldRejectWithdrawAboveStandardCap() {
         CustomerId ownerId = CustomerId.generate();
         Account account = CheckingAccount.open(ownerId, Currency.USD);
-        account.deposit(Money.of(10000.0, Currency.USD));
+        account.deposit(TransactionAmount.of(10000.0, Currency.USD));
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.withdraw(
-                new WithdrawMoneyUseCase.Command(account.getId(), Money.of(5001.0, Currency.USD))))
+                new WithdrawMoneyUseCase.Command(account.getId(), TransactionAmount.of(5001.0, Currency.USD))))
                 .isInstanceOf(LimitExceededException.class)
                 .hasMessageContaining("STANDARD");
     }
@@ -320,7 +320,7 @@ class AccountApplicationServiceTest {
     void shouldAccrueInterestOnSavingsAccount() {
         CustomerId ownerId = CustomerId.generate();
         SavingsAccount account = SavingsAccount.open(ownerId, Currency.USD, new BigDecimal("0.12"));
-        account.deposit(Money.of(1000.0, Currency.USD));
+        account.deposit(TransactionAmount.of(1000.0, Currency.USD));
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

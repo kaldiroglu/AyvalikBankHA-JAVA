@@ -31,7 +31,7 @@ class TimeDepositAccountTest {
     @Test
     void shouldRejectFurtherDeposits() {
         TimeDepositAccount account = openOneYearUsdDeposit();
-        assertThatThrownBy(() -> account.deposit(Money.of(100.0, Currency.USD)))
+        assertThatThrownBy(() -> account.deposit(TransactionAmount.of(100.0, Currency.USD)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("locked");
     }
@@ -39,7 +39,7 @@ class TimeDepositAccountTest {
     @Test
     void shouldRejectWithdrawalBeforeMaturity() {
         TimeDepositAccount account = openOneYearUsdDeposit();
-        assertThatThrownBy(() -> account.withdraw(Money.of(100.0, Currency.USD)))
+        assertThatThrownBy(() -> account.withdraw(TransactionAmount.of(100.0, Currency.USD)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("matured");
     }
@@ -66,7 +66,7 @@ class TimeDepositAccountTest {
     void shouldAllowWithdrawalAfterMaturity() {
         TimeDepositAccount account = openOneYearUsdDeposit();
         account.mature(LocalDate.of(2027, 4, 1));
-        account.withdraw(Money.of(500.0, Currency.USD));
+        account.withdraw(TransactionAmount.of(500.0, Currency.USD));
         assertThat(account.getBalance().amount()).isEqualByComparingTo("550.00");
     }
 
