@@ -21,7 +21,7 @@ public final class FrozenState implements AccountState {
 
     @Override
     public AccountState freeze() {
-        throw new IllegalStateException("Account is already frozen");
+        throw new AccountNotActiveException("Account is already frozen");
     }
 
     @Override
@@ -32,7 +32,7 @@ public final class FrozenState implements AccountState {
 
     @Override
     public void requireOperable() {
-        throw new IllegalStateException("Account is frozen");
+        throw new AccountNotActiveException("Account is frozen");
     }
 
     @Override

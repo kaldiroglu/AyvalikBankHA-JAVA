@@ -18,22 +18,22 @@ public final class ClosedState implements AccountState {
 
     @Override
     public AccountState freeze() {
-        throw new IllegalStateException("Cannot freeze a closed account");
+        throw new AccountNotActiveException("Cannot freeze a closed account");
     }
 
     @Override
     public AccountState unfreeze() {
-        throw new IllegalStateException("Cannot unfreeze a closed account");
+        throw new AccountNotActiveException("Cannot unfreeze a closed account");
     }
 
     @Override
     public AccountState close() {
-        throw new IllegalStateException("Account is already closed");
+        throw new AccountNotActiveException("Account is already closed");
     }
 
     @Override
     public void requireOperable() {
-        throw new IllegalStateException("Account is closed");
+        throw new AccountNotActiveException("Account is closed");
     }
 
     @Override

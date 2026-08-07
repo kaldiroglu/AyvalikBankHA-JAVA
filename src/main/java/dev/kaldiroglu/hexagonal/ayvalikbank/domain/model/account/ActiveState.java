@@ -22,7 +22,7 @@ public final class ActiveState implements AccountState {
 
     @Override
     public AccountState unfreeze() {
-        throw new IllegalStateException("Account is not frozen");
+        throw new AccountNotActiveException("Account is not frozen");
     }
 
     @Override

@@ -116,7 +116,7 @@ public final class TimeDepositAccount extends Account {
      */
     @Override
     public Transaction deposit(TransactionAmount amount) {
-        throw new IllegalStateException("Time deposit principal is locked — further deposits are not allowed");
+        throw new OperationNotPermittedException("Time deposit principal is locked — further deposits are not allowed");
     }
 
     /**
@@ -129,7 +129,7 @@ public final class TimeDepositAccount extends Account {
     public Transaction withdraw(TransactionAmount amount) {
         requireActive();
         if (!matured)
-            throw new IllegalStateException("Time deposit has not matured");
+            throw new OperationNotPermittedException("Time deposit has not matured");
         requireSameCurrency(amount);
         if (!this.balance.isGreaterThanOrEqualTo(amount.asMoney()))
             throw new InsufficientBalanceException("Insufficient funds");
@@ -146,7 +146,7 @@ public final class TimeDepositAccount extends Account {
      */
     @Override
     public Transaction transferOut(TransactionAmount amount, Money fee, String targetAccountId) {
-        throw new IllegalStateException("Time deposit accounts do not support transfers");
+        throw new OperationNotPermittedException("Time deposit accounts do not support transfers");
     }
 
     /**
@@ -165,11 +165,11 @@ public final class TimeDepositAccount extends Account {
     public Transaction mature(LocalDate today) {
         // FROZEN accounts can still mature: maturation is a date-driven system action.
         if (state.isTerminal())
-            throw new IllegalStateException("Cannot mature a closed account");
+            throw new AccountNotActiveException("Cannot mature a closed account");
         if (matured)
-            throw new IllegalStateException("Account is already matured");
+            throw new OperationNotPermittedException("Account is already matured");
         if (today.isBefore(maturityDate))
-            throw new IllegalStateException("Maturity date not yet reached");
+            throw new OperationNotPermittedException("Maturity date not yet reached");
         long months = ChronoUnit.MONTHS.between(openedOn, maturityDate);
         BigDecimal years = BigDecimal.valueOf(months).divide(BigDecimal.valueOf(12), 10, RoundingMode.HALF_UP);
         // Final rounding to 2 decimal places is applied by Money.multiply.

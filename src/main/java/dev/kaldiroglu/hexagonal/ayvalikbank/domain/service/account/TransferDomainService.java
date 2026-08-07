@@ -2,6 +2,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.account;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Money;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.TransactionAmount;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.TransactionLimitExceededException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerTier;
 
 import java.math.BigDecimal;
@@ -28,7 +29,7 @@ public class TransferDomainService {
     public void requireTransferWithinLimit(TransactionAmount amount, CustomerTier tier) {
         tier.maxPerTransfer().ifPresent(cap -> {
             if (amount.asMoney().amount().compareTo(cap) > 0)
-                throw new IllegalStateException(
+                throw new TransactionLimitExceededException(
                         "Transfer amount " + amount + " exceeds " + tier + " tier limit of " + cap);
         });
     }
@@ -36,7 +37,7 @@ public class TransferDomainService {
     public void requireWithdrawalWithinLimit(TransactionAmount amount, CustomerTier tier) {
         tier.maxPerWithdrawal().ifPresent(cap -> {
             if (amount.asMoney().amount().compareTo(cap) > 0)
-                throw new IllegalStateException(
+                throw new TransactionLimitExceededException(
                         "Withdrawal amount " + amount + " exceeds " + tier + " tier limit of " + cap);
         });
     }

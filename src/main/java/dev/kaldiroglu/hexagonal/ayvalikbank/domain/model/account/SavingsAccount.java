@@ -109,10 +109,10 @@ public final class SavingsAccount extends Account {
      */
     public Transaction accrueInterest(YearMonth month) {
         if (state.isTerminal())
-            throw new IllegalStateException("Cannot accrue interest on a closed account");
+            throw new AccountNotActiveException("Cannot accrue interest on a closed account");
         LocalDate firstOfNextMonth = month.plusMonths(1).atDay(1);
         if (lastAccrualDate != null && !firstOfNextMonth.isAfter(lastAccrualDate))
-            throw new IllegalStateException("Interest already accrued for or after " + month);
+            throw new OperationNotPermittedException("Interest already accrued for or after " + month);
         BigDecimal monthlyRate = annualInterestRate.divide(MONTHS_PER_YEAR, 10, RoundingMode.HALF_UP);
         Money interest = this.balance.multiply(monthlyRate);
         this.balance = this.balance.add(interest);
