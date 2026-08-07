@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-184 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+186 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -301,7 +301,7 @@ These tests cover the orchestration layer. All repository and infrastructure por
 
 ---
 
-### `AccountApplicationServiceTest` — 21 tests
+### `AccountApplicationServiceTest` — 23 tests
 
 **Class under test:** `application/service/AccountApplicationService.java`
 
@@ -353,6 +353,8 @@ These tests cover the orchestration layer. All repository and infrastructure por
 | `shouldHalveFeeForPremiumSourceCustomer` | When the source owner is `PREMIUM`, the cross-customer transfer fee is halved (1% × 0.5 multiplier × 200 = 1.00 fee, source debited 201.00). |
 | `shouldRejectTransferAboveStandardCap` | A 5001 USD transfer for a `STANDARD` source customer throws `LimitExceededException` (the cap is 5000). |
 | `shouldRejectWithdrawAboveStandardCap` | A 5001 USD withdrawal on an account whose owner is `STANDARD` throws `LimitExceededException`. |
+| `shouldStoreTransferFeePercent` | `setTransferFee` delegates the percentage to `SettingsRepositoryPort.setTransferFeePercent`. |
+| `shouldRejectNegativeTransferFeePercent` | A negative percentage throws `IllegalArgumentException` and the repository is never touched. Covers a guard that no test previously exercised: `SetTransferFeeRequest` carries `@DecimalMin("0.0")`, so the REST layer rejects negatives before the service is reached. |
 
 ---
 

@@ -61,8 +61,17 @@ Immutable and self-validating. `Money` permits negative amounts (required to rep
 - `domain/service/account/TransferDomainService` — computes fees (0% same customer; cross-customer fee = admin's % × source customer's tier multiplier) and validates per-transaction transfer / withdrawal caps from the tier
 
 **Ports In:**
-- `domain/port/in/account/` — 15 account use cases: `OpenCheckingAccountUseCase`, `OpenSavingsAccountUseCase`, `OpenTimeDepositAccountUseCase`, `DepositMoneyUseCase`, `WithdrawMoneyUseCase`, `TransferMoneyUseCase`, `GetBalanceUseCase`, `GetTransactionsUseCase`, `ListAccountsUseCase`, `FreezeAccountUseCase`, `UnfreezeAccountUseCase`, `CloseAccountUseCase`, `AccrueInterestUseCase`, `MatureTimeDepositUseCase`, `SetTransferFeeUseCase`
-- `domain/port/in/customer/` — 5 customer use cases: `CreateCustomerUseCase`, `DeleteCustomerUseCase`, `ListCustomersUseCase`, `ChangePasswordUseCase`, `ChangeCustomerTierUseCase`
+- `application/port/in/account/` — three account-facing ports, grouped by actor:
+  - `CustomerAccountPort` — what a customer does with their own accounts: `openChecking`, `openSavings`, `openTimeDeposit`, `deposit`, `withdraw`, `transfer`, `getBalance`, `listAccounts`, `getTransactions`
+  - `AccountAdministrationPort` — what an admin does to an account: `freezeAccount`, `unfreezeAccount`, `closeAccount`, `accrueInterest`, `mature`
+  - `BankSettingsPort` — bank-wide configuration: `setTransferFee`
+- `application/port/in/customer/` — two customer-facing ports:
+  - `CustomerAdministrationPort` — `createCustomer`, `deleteCustomer`, `listCustomers`, `changeCustomerTier`
+  - `CustomerSelfServicePort` — `changePassword`
+
+A port is one conversation with one kind of outside actor, not one method. Driving ports live in
+`application/` because a use case is an application concern; driven ports live in `domain/` because
+the domain declares the interfaces it requires. See `Refactorings.md` entry 2.
 
 Each use case carries a nested `Command` record for its input (or takes a typed ID directly for simple operations).
 
@@ -99,7 +108,7 @@ This hierarchy enriches the `domain/model/` layer only. No new layers are introd
 
 Example flow for `changePassword`:
 ```
-Controller → ChangePasswordUseCase.Command
+Controller → CustomerSelfServicePort.ChangePasswordCommand
            → CustomerApplicationService
                → PasswordValidationService.validate()      (format check)
                → PasswordHasherPort.matches()              (reuse check vs last 3)

@@ -284,3 +284,174 @@ inbound adapter (a batch job, a gRPC endpoint, a test) bypasses Bean Validation 
    and what would it buy?
 3. Defect 2's two tests were each individually correct. What kind of test would have caught the gap
    between them?
+
+---
+
+## Entry 2 — Actor-shaped ports: what a port actually is
+
+**Date:** 2026-08-07
+**Branch:** `refactor/actor-shaped-ports`
+**Baseline commit:** `48cd2f2` — all "before" figures below refer to this commit
+**Principle:** a port is one conversation with one kind of outside actor
+
+### The symptom
+
+`domain/port/in/` held **20 interfaces of 7–15 lines each**, one per use case. The cost showed up
+at every consumer:
+
+| Consumer | Before | After |
+|---|---|---|
+| `AccountController` constructor parameters | 9 | **1** |
+| `AdminController` constructor parameters | 10 | **3** |
+| `AccountApplicationService` `implements` list | 14 | **3** |
+| `CustomerApplicationService` `implements` list | 5 | **2** |
+| `AccountControllerTest` mock declarations | 10 | **2** |
+| `AdminControllerTest` mock declarations | 11 | **4** |
+
+### The deeper problem: no organizing principle
+
+Counting files was the least of it. The grouping was by aggregate in some places and by whoever
+happened to call it in others:
+
+- `AccountApplicationService` implemented both `DepositMoneyUseCase` (a customer operation) and
+  `FreezeAccountUseCase` (an admin operation) — two different actors in one class, with nothing
+  marking the boundary.
+- `SetTransferFeeUseCase` — a bank-wide setting, unrelated to any customer — was implemented by
+  `CustomerApplicationService`, purely because an admin invokes it. That service injected
+  `SettingsRepositoryPort` **solely** to serve that one method.
+
+When a dependency exists only to serve one misplaced method, the grouping is telling you it is wrong.
+
+### The principle
+
+Cockburn's definition: **a port is one conversation with one kind of outside actor.** Not one
+method, and not one aggregate.
+
+This system has two driving actors — Customer and Admin — talking about three subjects. That yields
+five ports, and the count falls out of the principle rather than being chosen:
+
+| Port | Actor × subject | Methods |
+|---|---|---|
+| `CustomerAccountPort` | customer × accounts | 9 |
+| `AccountAdministrationPort` | admin × accounts | 5 |
+| `CustomerAdministrationPort` | admin × customers | 4 |
+| `CustomerSelfServicePort` | customer × self | 1 |
+| `BankSettingsPort` | admin × bank config | 1 |
+
+**20 ports → 5**, with all 20 original methods preserved exactly.
+
+#### "But isn't one interface per method better Interface Segregation?"
+
+No, and this is the most common misreading of ISP. The principle says *clients should not be forced
+to depend on methods they do not use*. It does not say "one method per interface."
+
+`AccountController` uses **all nine** methods of `CustomerAccountPort`. It depends on nothing it
+does not call, so ISP is satisfied. Splitting those nine into nine interfaces bought no segregation
+whatsoever — it only added eight files and eight constructor parameters.
+
+Where ISP genuinely bites here is the actor boundary: `AdminController` must not depend on
+`deposit` and `withdraw`. That is precisely the split the new design makes, and precisely the split
+the old one blurred.
+
+### Before and after
+
+`AccountController`'s constructor is the clearest single artifact.
+
+**Before**
+
+```java
+public AccountController(OpenCheckingAccountUseCase openChecking,
+                         OpenSavingsAccountUseCase openSavings,
+                         OpenTimeDepositAccountUseCase openTimeDeposit,
+                         DepositMoneyUseCase depositMoney,
+                         WithdrawMoneyUseCase withdrawMoney,
+                         GetBalanceUseCase getBalance,
+                         GetTransactionsUseCase getTransactions,
+                         TransferMoneyUseCase transferMoney,
+                         ListAccountsUseCase listAccounts) {
+    this.openChecking = openChecking;
+    this.openSavings = openSavings;
+    this.openTimeDeposit = openTimeDeposit;
+    this.depositMoney = depositMoney;
+    this.withdrawMoney = withdrawMoney;
+    this.getBalance = getBalance;
+    this.getTransactions = getTransactions;
+    this.transferMoney = transferMoney;
+    this.listAccounts = listAccounts;
+}
+```
+
+**After**
+
+```java
+public AccountController(CustomerAccountPort customerAccount) {
+    this.customerAccount = customerAccount;
+}
+```
+
+Nine fields become one. Nothing the controller can do has changed.
+
+### The placement asymmetry
+
+Driving ports moved from `domain/port/in/` to `application/port/in/`. Driven ports stayed at
+`domain/port/out/`. That asymmetry is deliberate and is the rule worth memorizing:
+
+> **The domain declares the interfaces it *requires* (driven ports, `domain/port/out`).
+> The application declares the operations it *offers* (driving ports, `application/port/in`).**
+
+A driven port such as `AccountRepositoryPort` is the domain saying "to do my work I need something
+that can store an account" — dependency inversion, and unambiguously a domain statement. A driving
+port is the opposite: `OpenCheckingCommand` carrying an `ownerId` and a `Currency` is a *request
+shape*, an application concern. Keeping driving ports under `domain/` implied the domain knows what
+use cases exist, which is the coupling the layering is meant to prevent.
+
+Hombergs' *Get Your Hands Dirty on Clean Architecture* puts both directions under `application/`,
+which is symmetrical and common in Spring codebases. This project chose otherwise because the
+symmetry costs the clearest statement of dependency inversion the layout can make.
+
+### The honest costs
+
+1. **Multi-method interfaces are harder to fake by hand.** A hand-written `CustomerAccountPort`
+   stub must implement nine methods. Mockito makes this free; a hand-rolled test double does not.
+2. **`verifyNoInteractions` changes meaning** when narrow mocks merge. In this codebase it happened
+   to get *stronger* — all eight surviving uses are in "request rejected before reaching the
+   service" tests, so asserting that *nothing* on the port was called is exactly right. But that was
+   luck, not design. Where a test means "this specific method must not run," write
+   `verify(port, never()).thatMethod(any())`.
+
+### A gap the refactoring exposed
+
+`setTransferFee` validates that the fee is not negative. `SetTransferFeeRequest` also carries
+`@DecimalMin("0.0")`, so `AdminControllerTest`'s negative-value case asserts
+`verifyNoInteractions(bankSettings)` — the request is rejected by Bean Validation and **never reaches
+the service**. The guard was correct defense-in-depth with *zero test coverage*, and this refactoring
+moved it from one class to another with nothing verifying it arrived intact.
+
+Two tests were added to close it. This is the third instance of one shape in this codebase — a dead
+exception handler (entry 1, defect 2), a never-thrown exception (entry 1, defect 2), and now an
+unexercised guard. **Code that is correct, defensive, and unreachable from the outside is exactly
+the code that rots silently**, because no failing test ever announces its absence.
+
+### Scope
+
+| | |
+|---|---|
+| Ports deleted | 20 (all of `domain/port/in/`) |
+| Ports created | 5 (under `application/port/in/`) |
+| Files changed in the migration commit | 30 — 161 insertions, 426 deletions |
+| Behavior changes | none |
+| Tests | 184 → 184 through the migration, then 186 after covering the fee guard |
+| Persistence, domain model, `domain/port/out` | untouched |
+
+The migration commit deliberately landed at **exactly 184 tests**. Holding the count fixed is what
+makes "no behavior changed" checkable rather than merely asserted; the two new tests were added
+afterwards, in their own commit, so the signal stayed clean.
+
+### Discussion questions
+
+1. `CustomerSelfServicePort` has one method. Justify it as a port rather than folding
+   `changePassword` into `CustomerAdministrationPort`.
+2. The driving/driven asymmetry is defended above. Make the opposing case for Hombergs' symmetrical
+   layout — what does it buy?
+3. `AccountApplicationService` still implements three ports and serves two different actors. Should
+   it be split? What would decide it?
