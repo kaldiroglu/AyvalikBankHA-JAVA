@@ -22,11 +22,11 @@ public class BankUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         return customerRepository.findByEmail(email)
-                .map(customer -> User.builder()
-                        .username(customer.getEmail())
-                        .password(customer.getCurrentPassword().hashedValue())
-                        .authorities(List.of(new SimpleGrantedAuthority("ROLE_" + customer.getRole())))
-                        .build())
+                .map(customer -> (UserDetails) new BankUserPrincipal(
+                        customer.getId(),
+                        customer.getEmail(),
+                        customer.getCurrentPassword().hashedValue(),
+                        List.of(new SimpleGrantedAuthority("ROLE_" + customer.getRole()))))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
     }
 }
