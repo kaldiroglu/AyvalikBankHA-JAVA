@@ -370,4 +370,23 @@ class AccountApplicationServiceTest {
                 .isInstanceOf(InvalidAccountOperationException.class)
                 .hasMessageContaining("not a time deposit");
     }
+
+    // ── transfer fee (BankSettingsPort) ───────────────────────────────────
+
+    @Test
+    void shouldStoreTransferFeePercent() {
+        service.setTransferFee(new BankSettingsPort.SetTransferFeeCommand(new BigDecimal("2.50")));
+
+        verify(settingsRepository).setTransferFeePercent(new BigDecimal("2.50"));
+    }
+
+    @Test
+    void shouldRejectNegativeTransferFeePercent() {
+        assertThatThrownBy(() -> service.setTransferFee(
+                new BankSettingsPort.SetTransferFeeCommand(new BigDecimal("-0.01"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cannot be negative");
+
+        verifyNoInteractions(settingsRepository);
+    }
 }
