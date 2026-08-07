@@ -8,8 +8,12 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccount
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.LimitExceededException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.AccountAdministrationPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.BankSettingsPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.CustomerAccountPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.CustomerAccountPort.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.AccountAdministrationPort.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.BankSettingsPort.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.AccountRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepositoryPort;
@@ -25,20 +29,9 @@ import java.util.List;
 @Service
 @Transactional
 public class AccountApplicationService implements
-        OpenCheckingAccountUseCase,
-        OpenSavingsAccountUseCase,
-        OpenTimeDepositAccountUseCase,
-        DepositMoneyUseCase,
-        WithdrawMoneyUseCase,
-        GetBalanceUseCase,
-        GetTransactionsUseCase,
-        TransferMoneyUseCase,
-        ListAccountsUseCase,
-        FreezeAccountUseCase,
-        UnfreezeAccountUseCase,
-        CloseAccountUseCase,
-        AccrueInterestUseCase,
-        MatureTimeDepositUseCase {
+        CustomerAccountPort,
+        AccountAdministrationPort,
+        BankSettingsPort {
 
     private final AccountRepositoryPort accountRepository;
     private final CustomerRepositoryPort customerRepository;
@@ -59,21 +52,21 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public CheckingAccount openChecking(OpenCheckingAccountUseCase.Command command) {
+    public CheckingAccount openChecking(OpenCheckingCommand command) {
         requireCustomerExists(command.ownerId());
         CheckingAccount account = CheckingAccount.open(command.ownerId(), command.currency(), command.overdraftLimit());
         return (CheckingAccount) accountRepository.save(account);
     }
 
     @Override
-    public SavingsAccount openSavings(OpenSavingsAccountUseCase.Command command) {
+    public SavingsAccount openSavings(OpenSavingsCommand command) {
         requireCustomerExists(command.ownerId());
         SavingsAccount account = SavingsAccount.open(command.ownerId(), command.currency(), command.annualInterestRate());
         return (SavingsAccount) accountRepository.save(account);
     }
 
     @Override
-    public TimeDepositAccount openTimeDeposit(OpenTimeDepositAccountUseCase.Command command) {
+    public TimeDepositAccount openTimeDeposit(OpenTimeDepositCommand command) {
         requireCustomerExists(command.ownerId());
         TimeDepositAccount account = TimeDepositAccount.open(
                 command.ownerId(), command.currency(), command.principal(),
@@ -82,7 +75,7 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public Transaction deposit(DepositMoneyUseCase.Command command) {
+    public Transaction deposit(DepositCommand command) {
         Account account = findAccountOrThrow(command.accountId());
         Transaction tx;
         try {
@@ -95,7 +88,7 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public Transaction withdraw(WithdrawMoneyUseCase.Command command) {
+    public Transaction withdraw(WithdrawCommand command) {
         Account account = findAccountOrThrow(command.accountId());
         Customer owner = findCustomerOrThrow(account.getOwnerId());
         try {
@@ -129,7 +122,7 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public void transfer(TransferMoneyUseCase.Command command) {
+    public void transfer(TransferCommand command) {
         Account source = findAccountOrThrow(command.sourceAccountId());
         Account target = findAccountOrThrow(command.targetAccountId());
         Customer sourceOwner = findCustomerOrThrow(source.getOwnerId());
@@ -192,7 +185,7 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public Transaction accrueInterest(AccrueInterestUseCase.Command command) {
+    public Transaction accrueInterest(AccrueInterestCommand command) {
         Account account = findAccountOrThrow(command.accountId());
         if (!(account instanceof SavingsAccount savings))
             throw new InvalidAccountOperationException("Account is not a savings account");
@@ -204,7 +197,7 @@ public class AccountApplicationService implements
     }
 
     @Override
-    public Transaction mature(MatureTimeDepositUseCase.Command command) {
+    public Transaction mature(MatureCommand command) {
         Account account = findAccountOrThrow(command.accountId());
         if (!(account instanceof TimeDepositAccount td))
             throw new InvalidAccountOperationException("Account is not a time deposit");
@@ -213,6 +206,13 @@ public class AccountApplicationService implements
         catch (IllegalStateException e) { throw new InvalidAccountOperationException(e.getMessage()); }
         accountRepository.save(td);
         return transactionRepository.save(tx);
+    }
+
+    @Override
+    public void setTransferFee(SetTransferFeeCommand command) {
+        if (command.feePercent().compareTo(BigDecimal.ZERO) < 0)
+            throw new IllegalArgumentException("Transfer fee percent cannot be negative");
+        settingsRepository.setTransferFeePercent(command.feePercent());
     }
 
     private void requireCustomerExists(CustomerId id) {

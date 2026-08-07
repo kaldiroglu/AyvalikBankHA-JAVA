@@ -6,9 +6,10 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReused
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Password;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepositoryPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerAdministrationPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerSelfServicePort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerAdministrationPort.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerSelfServicePort.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.PasswordHasherPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.customer.PasswordValidationService;
@@ -20,30 +21,23 @@ import java.util.List;
 @Service
 @Transactional
 public class CustomerApplicationService implements
-        CreateCustomerUseCase,
-        DeleteCustomerUseCase,
-        ListCustomersUseCase,
-        ChangePasswordUseCase,
-        ChangeCustomerTierUseCase,
-        SetTransferFeeUseCase {
+        CustomerAdministrationPort,
+        CustomerSelfServicePort {
 
     private final CustomerRepositoryPort customerRepository;
     private final PasswordHasherPort passwordHasher;
     private final PasswordValidationService passwordValidationService;
-    private final SettingsRepositoryPort settingsRepository;
 
     public CustomerApplicationService(CustomerRepositoryPort customerRepository,
                                       PasswordHasherPort passwordHasher,
-                                      PasswordValidationService passwordValidationService,
-                                      SettingsRepositoryPort settingsRepository) {
+                                      PasswordValidationService passwordValidationService) {
         this.customerRepository = customerRepository;
         this.passwordHasher = passwordHasher;
         this.passwordValidationService = passwordValidationService;
-        this.settingsRepository = settingsRepository;
     }
 
     @Override
-    public Customer createCustomer(CreateCustomerUseCase.Command command) {
+    public Customer createCustomer(CreateCustomerCommand command) {
         validatePassword(command.rawPassword());
         String hash = passwordHasher.hash(command.rawPassword());
         Customer customer = Customer.create(command.name(), command.email(), Password.ofHashed(hash));
@@ -64,7 +58,7 @@ public class CustomerApplicationService implements
     }
 
     @Override
-    public void changePassword(ChangePasswordUseCase.Command command) {
+    public void changePassword(ChangePasswordCommand command) {
         Customer customer = customerRepository.findById(command.customerId())
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + command.customerId()));
 
@@ -77,19 +71,13 @@ public class CustomerApplicationService implements
     }
 
     @Override
-    public void changeCustomerTier(ChangeCustomerTierUseCase.Command command) {
+    public void changeCustomerTier(ChangeCustomerTierCommand command) {
         Customer customer = customerRepository.findById(command.customerId())
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + command.customerId()));
         customer.changeTier(command.tier());
         customerRepository.save(customer);
     }
 
-    @Override
-    public void setTransferFee(SetTransferFeeUseCase.Command command) {
-        if (command.feePercent().compareTo(java.math.BigDecimal.ZERO) < 0)
-            throw new IllegalArgumentException("Transfer fee percent cannot be negative");
-        settingsRepository.setTransferFeePercent(command.feePercent());
-    }
 
     private void validatePassword(String rawPassword) {
         try {

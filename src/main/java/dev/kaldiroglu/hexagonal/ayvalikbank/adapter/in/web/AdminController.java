@@ -8,8 +8,9 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.Customer
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web.dto.response.TransactionResponse;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.AccountId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.AccountAdministrationPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.BankSettingsPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerAdministrationPort;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -22,55 +23,34 @@ import java.util.List;
 @RequestMapping("/api/admin")
 public class AdminController {
 
-    private final CreateCustomerUseCase createCustomer;
-    private final DeleteCustomerUseCase deleteCustomer;
-    private final ListCustomersUseCase listCustomers;
-    private final ChangeCustomerTierUseCase changeCustomerTier;
-    private final SetTransferFeeUseCase setTransferFee;
-    private final FreezeAccountUseCase freezeAccount;
-    private final UnfreezeAccountUseCase unfreezeAccount;
-    private final CloseAccountUseCase closeAccount;
-    private final AccrueInterestUseCase accrueInterest;
-    private final MatureTimeDepositUseCase matureTimeDeposit;
+    private final AccountAdministrationPort accountAdministration;
+    private final CustomerAdministrationPort customerAdministration;
+    private final BankSettingsPort bankSettings;
 
-    public AdminController(CreateCustomerUseCase createCustomer,
-                           DeleteCustomerUseCase deleteCustomer,
-                           ListCustomersUseCase listCustomers,
-                           ChangeCustomerTierUseCase changeCustomerTier,
-                           SetTransferFeeUseCase setTransferFee,
-                           FreezeAccountUseCase freezeAccount,
-                           UnfreezeAccountUseCase unfreezeAccount,
-                           CloseAccountUseCase closeAccount,
-                           AccrueInterestUseCase accrueInterest,
-                           MatureTimeDepositUseCase matureTimeDeposit) {
-        this.createCustomer = createCustomer;
-        this.deleteCustomer = deleteCustomer;
-        this.listCustomers = listCustomers;
-        this.changeCustomerTier = changeCustomerTier;
-        this.setTransferFee = setTransferFee;
-        this.freezeAccount = freezeAccount;
-        this.unfreezeAccount = unfreezeAccount;
-        this.closeAccount = closeAccount;
-        this.accrueInterest = accrueInterest;
-        this.matureTimeDeposit = matureTimeDeposit;
+    public AdminController(AccountAdministrationPort accountAdministration,
+                           CustomerAdministrationPort customerAdministration,
+                           BankSettingsPort bankSettings) {
+        this.accountAdministration = accountAdministration;
+        this.customerAdministration = customerAdministration;
+        this.bankSettings = bankSettings;
     }
 
     @PostMapping("/customers")
     public ResponseEntity<CustomerResponse> createCustomer(@Valid @RequestBody CreateCustomerRequest request) {
-        var customer = createCustomer.createCustomer(
-                new CreateCustomerUseCase.Command(request.name(), request.email(), request.password()));
+        var customer = customerAdministration.createCustomer(
+                new CustomerAdministrationPort.CreateCustomerCommand(request.name(), request.email(), request.password()));
         return ResponseEntity.status(HttpStatus.CREATED).body(CustomerResponse.from(customer));
     }
 
     @DeleteMapping("/customers/{customerId}")
     public ResponseEntity<Void> deleteCustomer(@PathVariable String customerId) {
-        deleteCustomer.deleteCustomer(CustomerId.of(customerId));
+        customerAdministration.deleteCustomer(CustomerId.of(customerId));
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/customers")
     public ResponseEntity<List<CustomerResponse>> listCustomers() {
-        var customers = listCustomers.listCustomers().stream()
+        var customers = customerAdministration.listCustomers().stream()
                 .map(CustomerResponse::from)
                 .toList();
         return ResponseEntity.ok(customers);
@@ -79,46 +59,46 @@ public class AdminController {
     @PutMapping("/customers/{customerId}/tier")
     public ResponseEntity<Void> changeCustomerTier(@PathVariable String customerId,
                                                     @Valid @RequestBody ChangeCustomerTierRequest request) {
-        changeCustomerTier.changeCustomerTier(new ChangeCustomerTierUseCase.Command(
+        customerAdministration.changeCustomerTier(new CustomerAdministrationPort.ChangeCustomerTierCommand(
                 CustomerId.of(customerId), request.tier()));
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/settings/transfer-fee")
     public ResponseEntity<Void> setTransferFee(@Valid @RequestBody SetTransferFeeRequest request) {
-        setTransferFee.setTransferFee(new SetTransferFeeUseCase.Command(request.feePercent()));
+        bankSettings.setTransferFee(new BankSettingsPort.SetTransferFeeCommand(request.feePercent()));
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/accounts/{accountId}/freeze")
     public ResponseEntity<Void> freezeAccount(@PathVariable String accountId) {
-        freezeAccount.freezeAccount(AccountId.of(accountId));
+        accountAdministration.freezeAccount(AccountId.of(accountId));
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/accounts/{accountId}/unfreeze")
     public ResponseEntity<Void> unfreezeAccount(@PathVariable String accountId) {
-        unfreezeAccount.unfreezeAccount(AccountId.of(accountId));
+        accountAdministration.unfreezeAccount(AccountId.of(accountId));
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/accounts/{accountId}/close")
     public ResponseEntity<Void> closeAccount(@PathVariable String accountId) {
-        closeAccount.closeAccount(AccountId.of(accountId));
+        accountAdministration.closeAccount(AccountId.of(accountId));
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/accounts/{accountId}/accrue-interest")
     public ResponseEntity<TransactionResponse> accrueInterest(@PathVariable String accountId,
                                                                @Valid @RequestBody AccrueInterestRequest request) {
-        var tx = accrueInterest.accrueInterest(new AccrueInterestUseCase.Command(
+        var tx = accountAdministration.accrueInterest(new AccountAdministrationPort.AccrueInterestCommand(
                 AccountId.of(accountId), request.month()));
         return ResponseEntity.ok(TransactionResponse.from(tx));
     }
 
     @PutMapping("/accounts/{accountId}/mature")
     public ResponseEntity<TransactionResponse> matureTimeDeposit(@PathVariable String accountId) {
-        var tx = matureTimeDeposit.mature(new MatureTimeDepositUseCase.Command(AccountId.of(accountId)));
+        var tx = accountAdministration.mature(new AccountAdministrationPort.MatureCommand(AccountId.of(accountId)));
         return ResponseEntity.ok(TransactionResponse.from(tx));
     }
 }

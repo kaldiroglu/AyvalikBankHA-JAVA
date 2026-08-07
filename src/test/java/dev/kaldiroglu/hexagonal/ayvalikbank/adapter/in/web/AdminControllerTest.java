@@ -5,6 +5,9 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOper
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.AccountAdministrationPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.BankSettingsPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerAdministrationPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.AccountId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Currency;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
@@ -14,8 +17,6 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Money;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Password;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Transaction;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.TransactionType;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -43,16 +44,9 @@ class AdminControllerTest {
     @Autowired ObjectMapper objectMapper;
 
     @MockitoBean BankUserDetailsService userDetailsService;
-    @MockitoBean CreateCustomerUseCase createCustomer;
-    @MockitoBean DeleteCustomerUseCase deleteCustomer;
-    @MockitoBean ListCustomersUseCase listCustomers;
-    @MockitoBean ChangeCustomerTierUseCase changeCustomerTier;
-    @MockitoBean SetTransferFeeUseCase setTransferFee;
-    @MockitoBean FreezeAccountUseCase freezeAccount;
-    @MockitoBean UnfreezeAccountUseCase unfreezeAccount;
-    @MockitoBean CloseAccountUseCase closeAccount;
-    @MockitoBean AccrueInterestUseCase accrueInterest;
-    @MockitoBean MatureTimeDepositUseCase matureTimeDeposit;
+    @MockitoBean AccountAdministrationPort accountAdministration;
+    @MockitoBean CustomerAdministrationPort customerAdministration;
+    @MockitoBean BankSettingsPort bankSettings;
 
     // ── helpers ───────────────────────────────────────────────────────────
 
@@ -67,7 +61,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void createCustomer_returnsCreated() throws Exception {
         Customer saved = stubCustomer("Alice", "alice@test.com");
-        when(createCustomer.createCustomer(any())).thenReturn(saved);
+        when(customerAdministration.createCustomer(any())).thenReturn(saved);
 
         mockMvc.perform(post("/api/admin/customers")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -90,7 +84,7 @@ class AdminControllerTest {
                                 """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(createCustomer);
+        verifyNoInteractions(customerAdministration);
     }
 
     @Test
@@ -131,7 +125,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void deleteCustomer_returnsNoContent() throws Exception {
         String id = UUID.randomUUID().toString();
-        doNothing().when(deleteCustomer).deleteCustomer(any());
+        doNothing().when(customerAdministration).deleteCustomer(any());
 
         mockMvc.perform(delete("/api/admin/customers/{id}", id))
                 .andExpect(status().isNoContent());
@@ -142,7 +136,7 @@ class AdminControllerTest {
     void deleteCustomer_returnsNotFoundWhenMissing() throws Exception {
         String id = UUID.randomUUID().toString();
         doThrow(new CustomerNotFoundException("Customer not found"))
-                .when(deleteCustomer).deleteCustomer(any());
+                .when(customerAdministration).deleteCustomer(any());
 
         mockMvc.perform(delete("/api/admin/customers/{id}", id))
                 .andExpect(status().isNotFound());
@@ -153,7 +147,7 @@ class AdminControllerTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void listCustomers_returnsOkWithList() throws Exception {
-        when(listCustomers.listCustomers()).thenReturn(List.of(
+        when(customerAdministration.listCustomers()).thenReturn(List.of(
                 stubCustomer("Alice", "alice@test.com"),
                 stubCustomer("Bob", "bob@test.com")));
 
@@ -167,7 +161,7 @@ class AdminControllerTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void listCustomers_returnsEmptyList() throws Exception {
-        when(listCustomers.listCustomers()).thenReturn(List.of());
+        when(customerAdministration.listCustomers()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/admin/customers"))
                 .andExpect(status().isOk())
@@ -180,7 +174,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void changeCustomerTier_returnsOk() throws Exception {
         String id = UUID.randomUUID().toString();
-        doNothing().when(changeCustomerTier).changeCustomerTier(any());
+        doNothing().when(customerAdministration).changeCustomerTier(any());
 
         mockMvc.perform(put("/api/admin/customers/{id}/tier", id)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -189,7 +183,7 @@ class AdminControllerTest {
                                 """))
                 .andExpect(status().isOk());
 
-        verify(changeCustomerTier).changeCustomerTier(any());
+        verify(customerAdministration).changeCustomerTier(any());
     }
 
     @Test
@@ -199,7 +193,7 @@ class AdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(changeCustomerTier);
+        verifyNoInteractions(customerAdministration);
     }
 
     @Test
@@ -218,7 +212,7 @@ class AdminControllerTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void setTransferFee_returnsOk() throws Exception {
-        doNothing().when(setTransferFee).setTransferFee(any());
+        doNothing().when(bankSettings).setTransferFee(any());
 
         mockMvc.perform(put("/api/admin/settings/transfer-fee")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -227,8 +221,8 @@ class AdminControllerTest {
                                 """))
                 .andExpect(status().isOk());
 
-        verify(setTransferFee).setTransferFee(
-                new SetTransferFeeUseCase.Command(new BigDecimal("1.5")));
+        verify(bankSettings).setTransferFee(
+                new BankSettingsPort.SetTransferFeeCommand(new BigDecimal("1.5")));
     }
 
     @Test
@@ -241,7 +235,7 @@ class AdminControllerTest {
                                 """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(setTransferFee);
+        verifyNoInteractions(bankSettings);
     }
 
     @Test
@@ -261,19 +255,19 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void freezeAccount_returnsOk() throws Exception {
         String id = UUID.randomUUID().toString();
-        doNothing().when(freezeAccount).freezeAccount(any());
+        doNothing().when(accountAdministration).freezeAccount(any());
 
         mockMvc.perform(put("/api/admin/accounts/{id}/freeze", id))
                 .andExpect(status().isOk());
 
-        verify(freezeAccount).freezeAccount(any());
+        verify(accountAdministration).freezeAccount(any());
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
     void freezeAccount_returnsUnprocessableEntityForInvalidTransition() throws Exception {
         doThrow(new AccountNotOperableException("Account is already frozen"))
-                .when(freezeAccount).freezeAccount(any());
+                .when(accountAdministration).freezeAccount(any());
 
         mockMvc.perform(put("/api/admin/accounts/{id}/freeze", UUID.randomUUID()))
                 .andExpect(status().isUnprocessableEntity());
@@ -284,7 +278,7 @@ class AdminControllerTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void unfreezeAccount_returnsOk() throws Exception {
-        doNothing().when(unfreezeAccount).unfreezeAccount(any());
+        doNothing().when(accountAdministration).unfreezeAccount(any());
 
         mockMvc.perform(put("/api/admin/accounts/{id}/unfreeze", UUID.randomUUID()))
                 .andExpect(status().isOk());
@@ -294,7 +288,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void unfreezeAccount_returnsUnprocessableEntityForInvalidTransition() throws Exception {
         doThrow(new AccountNotOperableException("Account is not frozen"))
-                .when(unfreezeAccount).unfreezeAccount(any());
+                .when(accountAdministration).unfreezeAccount(any());
 
         mockMvc.perform(put("/api/admin/accounts/{id}/unfreeze", UUID.randomUUID()))
                 .andExpect(status().isUnprocessableEntity());
@@ -305,7 +299,7 @@ class AdminControllerTest {
     @Test
     @WithMockUser(roles = "ADMIN")
     void closeAccount_returnsOk() throws Exception {
-        doNothing().when(closeAccount).closeAccount(any());
+        doNothing().when(accountAdministration).closeAccount(any());
 
         mockMvc.perform(put("/api/admin/accounts/{id}/close", UUID.randomUUID()))
                 .andExpect(status().isOk());
@@ -315,7 +309,7 @@ class AdminControllerTest {
     @WithMockUser(roles = "ADMIN")
     void closeAccount_returnsUnprocessableEntityForAlreadyClosed() throws Exception {
         doThrow(new AccountNotOperableException("Account is already closed"))
-                .when(closeAccount).closeAccount(any());
+                .when(accountAdministration).closeAccount(any());
 
         mockMvc.perform(put("/api/admin/accounts/{id}/close", UUID.randomUUID()))
                 .andExpect(status().isUnprocessableEntity());
@@ -336,7 +330,7 @@ class AdminControllerTest {
         AccountId accountId = AccountId.generate();
         Transaction tx = Transaction.create(accountId, TransactionType.INTEREST,
                 Money.of(10.0, Currency.USD), "Interest accrual for 2026-04");
-        when(accrueInterest.accrueInterest(any())).thenReturn(tx);
+        when(accountAdministration.accrueInterest(any())).thenReturn(tx);
 
         mockMvc.perform(put("/api/admin/accounts/{id}/accrue-interest", accountId.value())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -367,7 +361,7 @@ class AdminControllerTest {
         AccountId accountId = AccountId.generate();
         Transaction tx = Transaction.create(accountId, TransactionType.INTEREST,
                 Money.of(50.0, Currency.USD), "Maturity interest credit");
-        when(matureTimeDeposit.mature(any())).thenReturn(tx);
+        when(accountAdministration.mature(any())).thenReturn(tx);
 
         mockMvc.perform(put("/api/admin/accounts/{id}/mature", accountId.value()))
                 .andExpect(status().isOk())

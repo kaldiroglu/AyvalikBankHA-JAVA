@@ -6,16 +6,11 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFou
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.LimitExceededException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.AccountAdministrationPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.BankSettingsPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.CustomerAccountPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.AccrueInterestUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.DepositMoneyUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.MatureTimeDepositUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.OpenCheckingAccountUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.OpenSavingsAccountUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.OpenTimeDepositAccountUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.TransferMoneyUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.WithdrawMoneyUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.AccountRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepositoryPort;
@@ -62,7 +57,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.existsById(ownerId)).thenReturn(true);
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        CheckingAccount account = service.openChecking(new OpenCheckingAccountUseCase.Command(
+        CheckingAccount account = service.openChecking(new CustomerAccountPort.OpenCheckingCommand(
                 ownerId, Currency.USD, Money.of(100.0, Currency.USD)));
 
         assertThat(account.type()).isEqualTo(AccountType.CHECKING);
@@ -76,7 +71,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.existsById(ownerId)).thenReturn(true);
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        SavingsAccount account = service.openSavings(new OpenSavingsAccountUseCase.Command(
+        SavingsAccount account = service.openSavings(new CustomerAccountPort.OpenSavingsCommand(
                 ownerId, Currency.EUR, new BigDecimal("0.03")));
 
         assertThat(account.type()).isEqualTo(AccountType.SAVINGS);
@@ -89,7 +84,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.existsById(ownerId)).thenReturn(true);
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        TimeDepositAccount account = service.openTimeDeposit(new OpenTimeDepositAccountUseCase.Command(
+        TimeDepositAccount account = service.openTimeDeposit(new CustomerAccountPort.OpenTimeDepositCommand(
                 ownerId, Currency.USD, Money.of(1000.0, Currency.USD),
                 LocalDate.now().plusYears(1), new BigDecimal("0.05")));
 
@@ -102,7 +97,7 @@ class AccountApplicationServiceTest {
         CustomerId ownerId = CustomerId.generate();
         when(customerRepository.existsById(ownerId)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.openChecking(new OpenCheckingAccountUseCase.Command(
+        assertThatThrownBy(() -> service.openChecking(new CustomerAccountPort.OpenCheckingCommand(
                 ownerId, Currency.EUR, Money.zero(Currency.EUR))))
                 .isInstanceOf(CustomerNotFoundException.class);
     }
@@ -118,7 +113,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Transaction tx = service.deposit(new DepositMoneyUseCase.Command(accountId, TransactionAmount.of(200.0, Currency.USD)));
+        Transaction tx = service.deposit(new CustomerAccountPort.DepositCommand(accountId, TransactionAmount.of(200.0, Currency.USD)));
 
         assertThat(tx.getType()).isEqualTo(TransactionType.DEPOSIT);
         assertThat(account.getBalance().amount()).isEqualByComparingTo("200.00");
@@ -130,7 +125,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deposit(
-                new DepositMoneyUseCase.Command(id, TransactionAmount.of(100.0, Currency.USD))))
+                new CustomerAccountPort.DepositCommand(id, TransactionAmount.of(100.0, Currency.USD))))
                 .isInstanceOf(AccountNotFoundException.class);
     }
 
@@ -148,7 +143,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.transfer(new TransferMoneyUseCase.Command(
+        service.transfer(new CustomerAccountPort.TransferCommand(
                 source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // Same customer — no fee
@@ -171,7 +166,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.transfer(new TransferMoneyUseCase.Command(
+        service.transfer(new CustomerAccountPort.TransferCommand(
                 source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // 200 transferred + 2 fee (1%) = 202 deducted from source
@@ -248,7 +243,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.withdraw(
-                new WithdrawMoneyUseCase.Command(account.getId(), TransactionAmount.of(500.0, Currency.USD))))
+                new CustomerAccountPort.WithdrawCommand(account.getId(), TransactionAmount.of(500.0, Currency.USD))))
                 .isInstanceOf(InsufficientFundsException.class)
                 .hasMessageContaining("Insufficient");
     }
@@ -275,7 +270,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.transfer(new TransferMoneyUseCase.Command(
+        service.transfer(new CustomerAccountPort.TransferCommand(
                 source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // 1% × 0.5 multiplier × 200 = 1.00 fee → source debited 201.00
@@ -294,7 +289,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
         when(customerRepository.findById(owner1)).thenReturn(Optional.of(stubCustomer(owner1, CustomerTier.STANDARD)));
 
-        assertThatThrownBy(() -> service.transfer(new TransferMoneyUseCase.Command(
+        assertThatThrownBy(() -> service.transfer(new CustomerAccountPort.TransferCommand(
                 source.getId(), target.getId(), TransactionAmount.of(5001.0, Currency.USD))))
                 .isInstanceOf(LimitExceededException.class)
                 .hasMessageContaining("STANDARD");
@@ -309,7 +304,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.withdraw(
-                new WithdrawMoneyUseCase.Command(account.getId(), TransactionAmount.of(5001.0, Currency.USD))))
+                new CustomerAccountPort.WithdrawCommand(account.getId(), TransactionAmount.of(5001.0, Currency.USD))))
                 .isInstanceOf(LimitExceededException.class)
                 .hasMessageContaining("STANDARD");
     }
@@ -325,7 +320,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Transaction tx = service.accrueInterest(new AccrueInterestUseCase.Command(
+        Transaction tx = service.accrueInterest(new AccountAdministrationPort.AccrueInterestCommand(
                 account.getId(), YearMonth.of(2026, 4)));
 
         assertThat(tx.getType()).isEqualTo(TransactionType.INTEREST);
@@ -338,7 +333,7 @@ class AccountApplicationServiceTest {
         CheckingAccount account = CheckingAccount.open(ownerId, Currency.USD);
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
 
-        assertThatThrownBy(() -> service.accrueInterest(new AccrueInterestUseCase.Command(
+        assertThatThrownBy(() -> service.accrueInterest(new AccountAdministrationPort.AccrueInterestCommand(
                 account.getId(), YearMonth.of(2026, 4))))
                 .isInstanceOf(InvalidAccountOperationException.class)
                 .hasMessageContaining("not a savings");
@@ -359,7 +354,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Transaction tx = service.mature(new MatureTimeDepositUseCase.Command(account.getId()));
+        Transaction tx = service.mature(new AccountAdministrationPort.MatureCommand(account.getId()));
 
         assertThat(tx.getType()).isEqualTo(TransactionType.INTEREST);
         assertThat(account.isMatured()).isTrue();
@@ -371,7 +366,7 @@ class AccountApplicationServiceTest {
         CheckingAccount account = CheckingAccount.open(ownerId, Currency.USD);
         when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
 
-        assertThatThrownBy(() -> service.mature(new MatureTimeDepositUseCase.Command(account.getId())))
+        assertThatThrownBy(() -> service.mature(new AccountAdministrationPort.MatureCommand(account.getId())))
                 .isInstanceOf(InvalidAccountOperationException.class)
                 .hasMessageContaining("not a time deposit");
     }

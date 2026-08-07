@@ -5,7 +5,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidPasswor
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReusedException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.ChangePasswordUseCase;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerSelfServicePort;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -29,7 +29,7 @@ class CustomerControllerTest {
     @Autowired MockMvc mockMvc;
 
     @MockitoBean BankUserDetailsService userDetailsService;
-    @MockitoBean ChangePasswordUseCase changePassword;
+    @MockitoBean CustomerSelfServicePort customerSelfService;
 
     private String customerId() {
         return UUID.randomUUID().toString();
@@ -40,7 +40,7 @@ class CustomerControllerTest {
     @Test
     @WithMockUser(roles = "CUSTOMER")
     void changePassword_returnsOk() throws Exception {
-        doNothing().when(changePassword).changePassword(any());
+        doNothing().when(customerSelfService).changePassword(any());
 
         mockMvc.perform(put("/api/customers/{id}/password", customerId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -49,7 +49,7 @@ class CustomerControllerTest {
                                 """))
                 .andExpect(status().isOk());
 
-        verify(changePassword).changePassword(any());
+        verify(customerSelfService).changePassword(any());
     }
 
     @Test
@@ -62,14 +62,14 @@ class CustomerControllerTest {
                                 """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(changePassword);
+        verifyNoInteractions(customerSelfService);
     }
 
     @Test
     @WithMockUser(roles = "CUSTOMER")
     void changePassword_returnsBadRequestOnWeakPassword() throws Exception {
         doThrow(new InvalidPasswordException("Password too weak"))
-                .when(changePassword).changePassword(any());
+                .when(customerSelfService).changePassword(any());
 
         mockMvc.perform(put("/api/customers/{id}/password", customerId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -83,7 +83,7 @@ class CustomerControllerTest {
     @WithMockUser(roles = "CUSTOMER")
     void changePassword_returnsConflictOnPasswordReuse() throws Exception {
         doThrow(new PasswordReusedException("Password recently used"))
-                .when(changePassword).changePassword(any());
+                .when(customerSelfService).changePassword(any());
 
         mockMvc.perform(put("/api/customers/{id}/password", customerId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -97,7 +97,7 @@ class CustomerControllerTest {
     @WithMockUser(roles = "CUSTOMER")
     void changePassword_returnsNotFoundForUnknownCustomer() throws Exception {
         doThrow(new CustomerNotFoundException("Customer not found"))
-                .when(changePassword).changePassword(any());
+                .when(customerSelfService).changePassword(any());
 
         mockMvc.perform(put("/api/customers/{id}/password", customerId())
                         .contentType(MediaType.APPLICATION_JSON)

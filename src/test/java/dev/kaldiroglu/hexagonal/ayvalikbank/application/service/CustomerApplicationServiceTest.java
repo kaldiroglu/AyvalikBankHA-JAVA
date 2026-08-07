@@ -3,16 +3,14 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidPasswordException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReusedException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerAdministrationPort;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerSelfServicePort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Password;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerTier;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.ChangeCustomerTierUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.ChangePasswordUseCase;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.CreateCustomerUseCase;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.CustomerRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.customer.PasswordHasherPort;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.customer.PasswordValidationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +30,6 @@ class CustomerApplicationServiceTest {
 
     @Mock private CustomerRepositoryPort customerRepository;
     @Mock private PasswordHasherPort passwordHasher;
-    @Mock private SettingsRepositoryPort settingsRepository;
 
     private CustomerApplicationService service;
 
@@ -40,7 +37,7 @@ class CustomerApplicationServiceTest {
     void setUp() {
         service = new CustomerApplicationService(
                 customerRepository, passwordHasher,
-                new PasswordValidationService(), settingsRepository);
+                new PasswordValidationService());
     }
 
     @Test
@@ -49,7 +46,7 @@ class CustomerApplicationServiceTest {
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         Customer result = service.createCustomer(
-                new CreateCustomerUseCase.Command("Ali", "ali@test.com", "Valid@123"));
+                new CustomerAdministrationPort.CreateCustomerCommand("Ali", "ali@test.com", "Valid@123"));
 
         assertThat(result.getEmail()).isEqualTo("ali@test.com");
         assertThat(result.getCurrentPassword().hashedValue()).isEqualTo("hashed");
@@ -59,7 +56,7 @@ class CustomerApplicationServiceTest {
     @Test
     void shouldThrowInvalidPasswordExceptionForWeakPassword() {
         assertThatThrownBy(() -> service.createCustomer(
-                new CreateCustomerUseCase.Command("Ali", "ali@test.com", "weak")))
+                new CustomerAdministrationPort.CreateCustomerCommand("Ali", "ali@test.com", "weak")))
                 .isInstanceOf(InvalidPasswordException.class);
         verifyNoInteractions(customerRepository);
     }
@@ -93,7 +90,7 @@ class CustomerApplicationServiceTest {
         when(passwordHasher.hash("Valid@123")).thenReturn("new-hash");
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.changePassword(new ChangePasswordUseCase.Command(id, "Valid@123"));
+        service.changePassword(new CustomerSelfServicePort.ChangePasswordCommand(id, "Valid@123"));
 
         assertThat(customer.getCurrentPassword().hashedValue()).isEqualTo("new-hash");
         verify(customerRepository).save(customer);
@@ -108,7 +105,7 @@ class CustomerApplicationServiceTest {
         when(passwordHasher.matches("Valid@123", "same-hash")).thenReturn(true);
 
         assertThatThrownBy(() -> service.changePassword(
-                new ChangePasswordUseCase.Command(id, "Valid@123")))
+                new CustomerSelfServicePort.ChangePasswordCommand(id, "Valid@123")))
                 .isInstanceOf(PasswordReusedException.class);
     }
 
@@ -120,7 +117,7 @@ class CustomerApplicationServiceTest {
         when(customerRepository.findById(id)).thenReturn(Optional.of(customer));
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.changeCustomerTier(new ChangeCustomerTierUseCase.Command(id, CustomerTier.PREMIUM));
+        service.changeCustomerTier(new CustomerAdministrationPort.ChangeCustomerTierCommand(id, CustomerTier.PREMIUM));
 
         assertThat(customer.getTier()).isEqualTo(CustomerTier.PREMIUM);
         verify(customerRepository).save(customer);
@@ -132,7 +129,7 @@ class CustomerApplicationServiceTest {
         when(customerRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.changeCustomerTier(
-                new ChangeCustomerTierUseCase.Command(id, CustomerTier.PREMIUM)))
+                new CustomerAdministrationPort.ChangeCustomerTierCommand(id, CustomerTier.PREMIUM)))
                 .isInstanceOf(CustomerNotFoundException.class);
     }
 }

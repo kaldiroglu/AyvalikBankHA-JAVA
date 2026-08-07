@@ -8,8 +8,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.AccountId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Money;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.TransactionAmount;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.account.*;
-import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.in.customer.*;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.CustomerAccountPort;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,34 +20,10 @@ import java.util.List;
 @RequestMapping("/api")
 public class AccountController {
 
-    private final OpenCheckingAccountUseCase openChecking;
-    private final OpenSavingsAccountUseCase openSavings;
-    private final OpenTimeDepositAccountUseCase openTimeDeposit;
-    private final DepositMoneyUseCase depositMoney;
-    private final WithdrawMoneyUseCase withdrawMoney;
-    private final GetBalanceUseCase getBalance;
-    private final GetTransactionsUseCase getTransactions;
-    private final TransferMoneyUseCase transferMoney;
-    private final ListAccountsUseCase listAccounts;
+    private final CustomerAccountPort customerAccount;
 
-    public AccountController(OpenCheckingAccountUseCase openChecking,
-                             OpenSavingsAccountUseCase openSavings,
-                             OpenTimeDepositAccountUseCase openTimeDeposit,
-                             DepositMoneyUseCase depositMoney,
-                             WithdrawMoneyUseCase withdrawMoney,
-                             GetBalanceUseCase getBalance,
-                             GetTransactionsUseCase getTransactions,
-                             TransferMoneyUseCase transferMoney,
-                             ListAccountsUseCase listAccounts) {
-        this.openChecking = openChecking;
-        this.openSavings = openSavings;
-        this.openTimeDeposit = openTimeDeposit;
-        this.depositMoney = depositMoney;
-        this.withdrawMoney = withdrawMoney;
-        this.getBalance = getBalance;
-        this.getTransactions = getTransactions;
-        this.transferMoney = transferMoney;
-        this.listAccounts = listAccounts;
+    public AccountController(CustomerAccountPort customerAccount) {
+        this.customerAccount = customerAccount;
     }
 
     @PostMapping("/accounts/checking")
@@ -57,7 +32,7 @@ public class AccountController {
         Money overdraft = request.overdraftLimit() == null
                 ? Money.zero(request.currency())
                 : Money.of(request.overdraftLimit(), request.currency());
-        var account = openChecking.openChecking(new OpenCheckingAccountUseCase.Command(
+        var account = customerAccount.openChecking(new CustomerAccountPort.OpenCheckingCommand(
                 CustomerId.of(ownerId), request.currency(), overdraft));
         return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(account));
     }
@@ -65,7 +40,7 @@ public class AccountController {
     @PostMapping("/accounts/savings")
     public ResponseEntity<AccountResponse> openSavingsAccount(@RequestParam String ownerId,
                                                                 @Valid @RequestBody OpenSavingsAccountRequest request) {
-        var account = openSavings.openSavings(new OpenSavingsAccountUseCase.Command(
+        var account = customerAccount.openSavings(new CustomerAccountPort.OpenSavingsCommand(
                 CustomerId.of(ownerId), request.currency(), request.annualInterestRate()));
         return ResponseEntity.status(HttpStatus.CREATED).body(AccountResponse.from(account));
     }
@@ -73,7 +48,7 @@ public class AccountController {
     @PostMapping("/accounts/time-deposit")
     public ResponseEntity<AccountResponse> openTimeDepositAccount(@RequestParam String ownerId,
                                                                     @Valid @RequestBody OpenTimeDepositAccountRequest request) {
-        var account = openTimeDeposit.openTimeDeposit(new OpenTimeDepositAccountUseCase.Command(
+        var account = customerAccount.openTimeDeposit(new CustomerAccountPort.OpenTimeDepositCommand(
                 CustomerId.of(ownerId), request.currency(),
                 Money.of(request.principal(), request.currency()),
                 request.maturityDate(), request.annualInterestRate()));
@@ -82,21 +57,21 @@ public class AccountController {
 
     @GetMapping("/customers/{customerId}/accounts")
     public ResponseEntity<List<AccountResponse>> listAccounts(@PathVariable String customerId) {
-        var accounts = listAccounts.listAccounts(CustomerId.of(customerId)).stream()
+        var accounts = customerAccount.listAccounts(CustomerId.of(customerId)).stream()
                 .map(AccountResponse::from).toList();
         return ResponseEntity.ok(accounts);
     }
 
     @GetMapping("/accounts/{accountId}/balance")
     public ResponseEntity<BalanceResponse> getBalance(@PathVariable String accountId) {
-        Money balance = getBalance.getBalance(AccountId.of(accountId));
+        Money balance = customerAccount.getBalance(AccountId.of(accountId));
         return ResponseEntity.ok(BalanceResponse.from(balance));
     }
 
     @PostMapping("/accounts/{accountId}/deposit")
     public ResponseEntity<TransactionResponse> deposit(@PathVariable String accountId,
                                                         @Valid @RequestBody MoneyOperationRequest request) {
-        var tx = depositMoney.deposit(new DepositMoneyUseCase.Command(
+        var tx = customerAccount.deposit(new CustomerAccountPort.DepositCommand(
                 AccountId.of(accountId), TransactionAmount.of(request.amount(), request.currency())));
         return ResponseEntity.status(HttpStatus.CREATED).body(TransactionResponse.from(tx));
     }
@@ -104,7 +79,7 @@ public class AccountController {
     @PostMapping("/accounts/{accountId}/withdraw")
     public ResponseEntity<TransactionResponse> withdraw(@PathVariable String accountId,
                                                          @Valid @RequestBody MoneyOperationRequest request) {
-        var tx = withdrawMoney.withdraw(new WithdrawMoneyUseCase.Command(
+        var tx = customerAccount.withdraw(new CustomerAccountPort.WithdrawCommand(
                 AccountId.of(accountId), TransactionAmount.of(request.amount(), request.currency())));
         return ResponseEntity.status(HttpStatus.CREATED).body(TransactionResponse.from(tx));
     }
@@ -112,7 +87,7 @@ public class AccountController {
     @PostMapping("/accounts/{accountId}/transfer")
     public ResponseEntity<Void> transfer(@PathVariable String accountId,
                                           @Valid @RequestBody TransferRequest request) {
-        transferMoney.transfer(new TransferMoneyUseCase.Command(
+        customerAccount.transfer(new CustomerAccountPort.TransferCommand(
                 AccountId.of(accountId),
                 AccountId.of(request.targetAccountId()),
                 TransactionAmount.of(request.amount(), request.currency())));
@@ -121,7 +96,7 @@ public class AccountController {
 
     @GetMapping("/accounts/{accountId}/transactions")
     public ResponseEntity<List<TransactionResponse>> getTransactions(@PathVariable String accountId) {
-        var txs = getTransactions.getTransactions(AccountId.of(accountId)).stream()
+        var txs = customerAccount.getTransactions(AccountId.of(accountId)).stream()
                 .map(TransactionResponse::from).toList();
         return ResponseEntity.ok(txs);
     }
