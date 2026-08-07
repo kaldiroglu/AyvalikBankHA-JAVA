@@ -90,7 +90,7 @@ class CustomerApplicationServiceTest {
         when(passwordHasher.hash("Valid@123")).thenReturn("new-hash");
         when(customerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service.changePassword(new CustomerSelfServicePort.ChangePasswordCommand(id, "Valid@123"));
+        service.changePassword(new CustomerSelfServicePort.ChangePasswordCommand(id, id, "Valid@123"));
 
         assertThat(customer.getCurrentPassword().hashedValue()).isEqualTo("new-hash");
         verify(customerRepository).save(customer);
@@ -105,7 +105,7 @@ class CustomerApplicationServiceTest {
         when(passwordHasher.matches("Valid@123", "same-hash")).thenReturn(true);
 
         assertThatThrownBy(() -> service.changePassword(
-                new CustomerSelfServicePort.ChangePasswordCommand(id, "Valid@123")))
+                new CustomerSelfServicePort.ChangePasswordCommand(id, id, "Valid@123")))
                 .isInstanceOf(PasswordReusedException.class);
     }
 

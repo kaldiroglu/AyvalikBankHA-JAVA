@@ -12,7 +12,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
  */
 public interface CustomerSelfServicePort {
 
-    record ChangePasswordCommand(CustomerId customerId, String rawNewPassword) {}
+    record ChangePasswordCommand(CustomerId callerId, CustomerId customerId, String rawNewPassword) {}
 
     void changePassword(ChangePasswordCommand command);
 }

@@ -146,7 +146,7 @@ class AccountControllerTest {
     @WithBankUser(customerId = CALLER_ID)
     void listAccounts_returnsOkWithList() throws Exception {
         CustomerId ownerId = CustomerId.generate();
-        when(customerAccount.listAccounts(any())).thenReturn(List.of(
+        when(customerAccount.listAccounts(any(), any())).thenReturn(List.of(
                 usdAccount(ownerId), CheckingAccount.open(ownerId, Currency.EUR)));
 
         mockMvc.perform(get("/api/customers/{id}/accounts", ownerId.value()))
@@ -161,7 +161,7 @@ class AccountControllerTest {
     @Test
     @WithBankUser(customerId = CALLER_ID)
     void getBalance_returnsOk() throws Exception {
-        when(customerAccount.getBalance(any())).thenReturn(Money.of(250.0, Currency.USD));
+        when(customerAccount.getBalance(any(), any())).thenReturn(Money.of(250.0, Currency.USD));
 
         mockMvc.perform(get("/api/accounts/{id}/balance", UUID.randomUUID()))
                 .andExpect(status().isOk())
@@ -173,7 +173,7 @@ class AccountControllerTest {
     @WithBankUser(customerId = CALLER_ID)
     void getBalance_returnsNotFoundForUnknownAccount() throws Exception {
         doThrow(new AccountNotFoundException("Account not found"))
-                .when(customerAccount).getBalance(any());
+                .when(customerAccount).getBalance(any(), any());
 
         mockMvc.perform(get("/api/accounts/{id}/balance", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
@@ -308,7 +308,7 @@ class AccountControllerTest {
     @WithBankUser(customerId = CALLER_ID)
     void getTransactions_returnsOkWithList() throws Exception {
         AccountId accountId = AccountId.generate();
-        when(customerAccount.getTransactions(any())).thenReturn(List.of(
+        when(customerAccount.getTransactions(any(), any())).thenReturn(List.of(
                 depositTx(accountId),
                 Transaction.create(accountId, TransactionType.WITHDRAWAL,
                         Money.of(30.0, Currency.USD), "Withdrawal")));
@@ -324,7 +324,7 @@ class AccountControllerTest {
     @WithBankUser(customerId = CALLER_ID)
     void getTransactions_returnsNotFoundForUnknownAccount() throws Exception {
         doThrow(new AccountNotFoundException("Account not found"))
-                .when(customerAccount).getTransactions(any());
+                .when(customerAccount).getTransactions(any(), any());
 
         mockMvc.perform(get("/api/accounts/{id}/transactions", UUID.randomUUID()))
                 .andExpect(status().isNotFound());

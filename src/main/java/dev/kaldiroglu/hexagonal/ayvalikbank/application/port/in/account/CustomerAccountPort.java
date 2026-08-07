@@ -13,7 +13,9 @@ import java.util.List;
  * <p>This is a port in Cockburn's sense: it groups the operations belonging to a single kind of
  * outside party, rather than devoting an interface to each individual method. The admin-facing
  * counterpart is {@link AccountAdministrationPort}, and keeping the two apart is what lets an
- * ownership rule be stated once — for this port — instead of method by method.
+ * ownership rule be stated once — for this port — instead of method by method. Every command and
+ * query below carries {@code callerId} first: the caller must own the account, and for the three
+ * {@code open*} commands the caller simply <i>is</i> the owner, so no owner is passed at all.
  *
  * <p>Note the direction of the dependency. This interface lives in the <b>application</b> layer,
  * not the domain, because a use case is an application concern: {@link OpenCheckingCommand} is a
@@ -23,18 +25,19 @@ import java.util.List;
  */
 public interface CustomerAccountPort {
 
-    record OpenCheckingCommand(CustomerId ownerId, Currency currency, Money overdraftLimit) {}
+    record OpenCheckingCommand(CustomerId callerId, Currency currency, Money overdraftLimit) {}
 
-    record OpenSavingsCommand(CustomerId ownerId, Currency currency, BigDecimal annualInterestRate) {}
+    record OpenSavingsCommand(CustomerId callerId, Currency currency, BigDecimal annualInterestRate) {}
 
-    record OpenTimeDepositCommand(CustomerId ownerId, Currency currency, Money principal,
+    record OpenTimeDepositCommand(CustomerId callerId, Currency currency, Money principal,
                                   LocalDate maturityDate, BigDecimal annualInterestRate) {}
 
-    record DepositCommand(AccountId accountId, TransactionAmount amount) {}
+    record DepositCommand(CustomerId callerId, AccountId accountId, TransactionAmount amount) {}
 
-    record WithdrawCommand(AccountId accountId, TransactionAmount amount) {}
+    record WithdrawCommand(CustomerId callerId, AccountId accountId, TransactionAmount amount) {}
 
-    record TransferCommand(AccountId sourceAccountId, AccountId targetAccountId, TransactionAmount amount) {}
+    record TransferCommand(CustomerId callerId, AccountId sourceAccountId,
+                           AccountId targetAccountId, TransactionAmount amount) {}
 
     CheckingAccount openChecking(OpenCheckingCommand command);
 
@@ -48,9 +51,9 @@ public interface CustomerAccountPort {
 
     void transfer(TransferCommand command);
 
-    Money getBalance(AccountId accountId);
+    Money getBalance(CustomerId callerId, AccountId accountId);
 
-    List<Account> listAccounts(CustomerId ownerId);
+    List<Account> listAccounts(CustomerId callerId, CustomerId ownerId);
 
-    List<Transaction> getTransactions(AccountId accountId);
+    List<Transaction> getTransactions(CustomerId callerId, AccountId accountId);
 }

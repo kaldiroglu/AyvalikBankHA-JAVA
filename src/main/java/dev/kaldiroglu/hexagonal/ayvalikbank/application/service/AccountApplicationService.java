@@ -53,23 +53,23 @@ public class AccountApplicationService implements
 
     @Override
     public CheckingAccount openChecking(OpenCheckingCommand command) {
-        requireCustomerExists(command.ownerId());
-        CheckingAccount account = CheckingAccount.open(command.ownerId(), command.currency(), command.overdraftLimit());
+        requireCustomerExists(command.callerId());
+        CheckingAccount account = CheckingAccount.open(command.callerId(), command.currency(), command.overdraftLimit());
         return (CheckingAccount) accountRepository.save(account);
     }
 
     @Override
     public SavingsAccount openSavings(OpenSavingsCommand command) {
-        requireCustomerExists(command.ownerId());
-        SavingsAccount account = SavingsAccount.open(command.ownerId(), command.currency(), command.annualInterestRate());
+        requireCustomerExists(command.callerId());
+        SavingsAccount account = SavingsAccount.open(command.callerId(), command.currency(), command.annualInterestRate());
         return (SavingsAccount) accountRepository.save(account);
     }
 
     @Override
     public TimeDepositAccount openTimeDeposit(OpenTimeDepositCommand command) {
-        requireCustomerExists(command.ownerId());
+        requireCustomerExists(command.callerId());
         TimeDepositAccount account = TimeDepositAccount.open(
-                command.ownerId(), command.currency(), command.principal(),
+                command.callerId(), command.currency(), command.principal(),
                 LocalDate.now(), command.maturityDate(), command.annualInterestRate());
         return (TimeDepositAccount) accountRepository.save(account);
     }
@@ -110,13 +110,13 @@ public class AccountApplicationService implements
 
     @Override
     @Transactional(readOnly = true)
-    public Money getBalance(AccountId accountId) {
+    public Money getBalance(CustomerId callerId, AccountId accountId) {
         return findAccountOrThrow(accountId).getBalance();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Transaction> getTransactions(AccountId accountId) {
+    public List<Transaction> getTransactions(CustomerId callerId, AccountId accountId) {
         findAccountOrThrow(accountId);
         return transactionRepository.findByAccountId(accountId);
     }
@@ -155,7 +155,7 @@ public class AccountApplicationService implements
 
     @Override
     @Transactional(readOnly = true)
-    public List<Account> listAccounts(CustomerId ownerId) {
+    public List<Account> listAccounts(CustomerId callerId, CustomerId ownerId) {
         requireCustomerExists(ownerId);
         return accountRepository.findByOwnerId(ownerId);
     }

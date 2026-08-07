@@ -113,7 +113,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Transaction tx = service.deposit(new CustomerAccountPort.DepositCommand(accountId, TransactionAmount.of(200.0, Currency.USD)));
+        Transaction tx = service.deposit(new CustomerAccountPort.DepositCommand(ownerId, accountId, TransactionAmount.of(200.0, Currency.USD)));
 
         assertThat(tx.getType()).isEqualTo(TransactionType.DEPOSIT);
         assertThat(account.getBalance().amount()).isEqualByComparingTo("200.00");
@@ -125,7 +125,7 @@ class AccountApplicationServiceTest {
         when(accountRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deposit(
-                new CustomerAccountPort.DepositCommand(id, TransactionAmount.of(100.0, Currency.USD))))
+                new CustomerAccountPort.DepositCommand(CustomerId.generate(), id, TransactionAmount.of(100.0, Currency.USD))))
                 .isInstanceOf(AccountNotFoundException.class);
     }
 
@@ -144,7 +144,7 @@ class AccountApplicationServiceTest {
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.transfer(new CustomerAccountPort.TransferCommand(
-                source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
+                ownerId, source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // Same customer — no fee
         assertThat(source.getBalance().amount()).isEqualByComparingTo("300.00");
@@ -167,7 +167,7 @@ class AccountApplicationServiceTest {
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.transfer(new CustomerAccountPort.TransferCommand(
-                source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
+                owner1, source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // 200 transferred + 2 fee (1%) = 202 deducted from source
         assertThat(source.getBalance().amount()).isEqualByComparingTo("798.00");
@@ -243,7 +243,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.withdraw(
-                new CustomerAccountPort.WithdrawCommand(account.getId(), TransactionAmount.of(500.0, Currency.USD))))
+                new CustomerAccountPort.WithdrawCommand(ownerId, account.getId(), TransactionAmount.of(500.0, Currency.USD))))
                 .isInstanceOf(InsufficientFundsException.class)
                 .hasMessageContaining("Insufficient");
     }
@@ -271,7 +271,7 @@ class AccountApplicationServiceTest {
         when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.transfer(new CustomerAccountPort.TransferCommand(
-                source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
+                owner1, source.getId(), target.getId(), TransactionAmount.of(200.0, Currency.USD)));
 
         // 1% × 0.5 multiplier × 200 = 1.00 fee → source debited 201.00
         assertThat(source.getBalance().amount()).isEqualByComparingTo("799.00");
@@ -290,7 +290,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.findById(owner1)).thenReturn(Optional.of(stubCustomer(owner1, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.transfer(new CustomerAccountPort.TransferCommand(
-                source.getId(), target.getId(), TransactionAmount.of(5001.0, Currency.USD))))
+                owner1, source.getId(), target.getId(), TransactionAmount.of(5001.0, Currency.USD))))
                 .isInstanceOf(LimitExceededException.class)
                 .hasMessageContaining("STANDARD");
     }
@@ -304,7 +304,7 @@ class AccountApplicationServiceTest {
         when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
 
         assertThatThrownBy(() -> service.withdraw(
-                new CustomerAccountPort.WithdrawCommand(account.getId(), TransactionAmount.of(5001.0, Currency.USD))))
+                new CustomerAccountPort.WithdrawCommand(ownerId, account.getId(), TransactionAmount.of(5001.0, Currency.USD))))
                 .isInstanceOf(LimitExceededException.class)
                 .hasMessageContaining("STANDARD");
     }
