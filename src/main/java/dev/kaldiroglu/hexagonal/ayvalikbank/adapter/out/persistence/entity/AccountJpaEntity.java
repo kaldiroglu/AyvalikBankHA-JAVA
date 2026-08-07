@@ -13,6 +13,18 @@ public class AccountJpaEntity {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
+    /**
+     * Optimistic-lock token, managed entirely by Hibernate.
+     *
+     * <p>Deliberately absent from the domain {@code Account}: a version is a persistence concern,
+     * not a banking one. Keeping it here is why {@code AccountPersistenceAdapter.save} has to mutate
+     * the <i>managed</i> entity rather than merge a freshly built detached one — the version loaded
+     * at the start of the transaction survives only inside the persistence context.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @Column(name = "owner_id", nullable = false)
     private UUID ownerId;
 
@@ -56,6 +68,8 @@ public class AccountJpaEntity {
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
     public UUID getOwnerId() { return ownerId; }
     public void setOwnerId(UUID ownerId) { this.ownerId = ownerId; }
     public String getCurrency() { return currency; }

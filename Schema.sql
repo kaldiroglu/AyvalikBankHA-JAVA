@@ -43,7 +43,8 @@ CREATE TABLE public.accounts (
     opened_on date,
     overdraft_limit numeric(19,2),
     principal numeric(19,2),
-    type character varying(16) NOT NULL
+    type character varying(16) NOT NULL,
+    version bigint DEFAULT 0 NOT NULL
 );
 
 
