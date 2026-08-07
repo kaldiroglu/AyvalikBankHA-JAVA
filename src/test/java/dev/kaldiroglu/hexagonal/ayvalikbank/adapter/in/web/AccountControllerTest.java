@@ -30,6 +30,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class)
 class AccountControllerTest {
 
+    static final String CALLER_ID = "11111111-1111-1111-1111-111111111111";
+    static final CustomerId CALLER = CustomerId.of(CALLER_ID);
+    static final CustomerId OTHER_CUSTOMER = CustomerId.of("22222222-2222-2222-2222-222222222222");
+
     @Autowired MockMvc mockMvc;
 
     @MockitoBean BankUserDetailsService userDetailsService;
@@ -49,7 +53,7 @@ class AccountControllerTest {
     // ── POST /api/accounts/checking ───────────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void openChecking_returnsCreated() throws Exception {
         CustomerId ownerId = CustomerId.generate();
         CheckingAccount account = CheckingAccount.open(ownerId, Currency.USD);
@@ -68,7 +72,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void openChecking_returnsBadRequestOnMissingCurrency() throws Exception {
         mockMvc.perform(post("/api/accounts/checking")
                         .param("ownerId", UUID.randomUUID().toString())
@@ -94,7 +98,7 @@ class AccountControllerTest {
     // ── POST /api/accounts/savings ────────────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void openSavings_returnsCreated() throws Exception {
         CustomerId ownerId = CustomerId.generate();
         SavingsAccount account = SavingsAccount.open(ownerId, Currency.EUR, new BigDecimal("0.03"));
@@ -114,7 +118,7 @@ class AccountControllerTest {
     // ── POST /api/accounts/time-deposit ───────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void openTimeDeposit_returnsCreated() throws Exception {
         CustomerId ownerId = CustomerId.generate();
         TimeDepositAccount account = TimeDepositAccount.open(
@@ -139,7 +143,7 @@ class AccountControllerTest {
     // ── GET /api/customers/{id}/accounts ─────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void listAccounts_returnsOkWithList() throws Exception {
         CustomerId ownerId = CustomerId.generate();
         when(customerAccount.listAccounts(any())).thenReturn(List.of(
@@ -155,7 +159,7 @@ class AccountControllerTest {
     // ── GET /api/accounts/{id}/balance ────────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void getBalance_returnsOk() throws Exception {
         when(customerAccount.getBalance(any())).thenReturn(Money.of(250.0, Currency.USD));
 
@@ -166,7 +170,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void getBalance_returnsNotFoundForUnknownAccount() throws Exception {
         doThrow(new AccountNotFoundException("Account not found"))
                 .when(customerAccount).getBalance(any());
@@ -178,7 +182,7 @@ class AccountControllerTest {
     // ── POST /api/accounts/{id}/deposit ───────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void deposit_returnsCreated() throws Exception {
         AccountId accountId = AccountId.generate();
         when(customerAccount.deposit(any())).thenReturn(depositTx(accountId));
@@ -195,7 +199,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void deposit_returnsBadRequestOnNegativeAmount() throws Exception {
         mockMvc.perform(post("/api/accounts/{id}/deposit", UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -208,7 +212,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void deposit_returnsNotFoundForUnknownAccount() throws Exception {
         doThrow(new AccountNotFoundException("Account not found"))
                 .when(customerAccount).deposit(any());
@@ -224,7 +228,7 @@ class AccountControllerTest {
     // ── POST /api/accounts/{id}/withdraw ──────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void withdraw_returnsCreated() throws Exception {
         AccountId accountId = AccountId.generate();
         Transaction tx = Transaction.create(accountId, TransactionType.WITHDRAWAL,
@@ -241,7 +245,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void withdraw_returnsUnprocessableEntityOnInsufficientFunds() throws Exception {
         doThrow(new InsufficientFundsException("Insufficient funds"))
                 .when(customerAccount).withdraw(any());
@@ -257,7 +261,7 @@ class AccountControllerTest {
     // ── POST /api/accounts/{id}/transfer ──────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void transfer_returnsOk() throws Exception {
         doNothing().when(customerAccount).transfer(any());
 
@@ -272,7 +276,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void transfer_returnsBadRequestOnMissingTarget() throws Exception {
         mockMvc.perform(post("/api/accounts/{id}/transfer", UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -285,7 +289,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void transfer_returnsUnprocessableEntityOnInsufficientFunds() throws Exception {
         doThrow(new InsufficientFundsException("Insufficient funds"))
                 .when(customerAccount).transfer(any());
@@ -301,7 +305,7 @@ class AccountControllerTest {
     // ── GET /api/accounts/{id}/transactions ───────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void getTransactions_returnsOkWithList() throws Exception {
         AccountId accountId = AccountId.generate();
         when(customerAccount.getTransactions(any())).thenReturn(List.of(
@@ -317,7 +321,7 @@ class AccountControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void getTransactions_returnsNotFoundForUnknownAccount() throws Exception {
         doThrow(new AccountNotFoundException("Account not found"))
                 .when(customerAccount).getTransactions(any());

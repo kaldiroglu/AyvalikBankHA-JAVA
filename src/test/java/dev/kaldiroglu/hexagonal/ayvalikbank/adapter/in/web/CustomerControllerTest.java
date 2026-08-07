@@ -4,6 +4,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFou
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidPasswordException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReusedException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
+import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerSelfServicePort;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class)
 class CustomerControllerTest {
 
+    static final String CALLER_ID = "11111111-1111-1111-1111-111111111111";
+    static final CustomerId CALLER = CustomerId.of(CALLER_ID);
+    static final String OTHER_CUSTOMER_ID = "22222222-2222-2222-2222-222222222222";
+
     @Autowired MockMvc mockMvc;
 
     @MockitoBean BankUserDetailsService userDetailsService;
@@ -38,7 +43,7 @@ class CustomerControllerTest {
     // ── PUT /api/customers/{id}/password ─────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void changePassword_returnsOk() throws Exception {
         doNothing().when(customerSelfService).changePassword(any());
 
@@ -53,7 +58,7 @@ class CustomerControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void changePassword_returnsBadRequestOnBlankPassword() throws Exception {
         mockMvc.perform(put("/api/customers/{id}/password", customerId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -66,7 +71,7 @@ class CustomerControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void changePassword_returnsBadRequestOnWeakPassword() throws Exception {
         doThrow(new InvalidPasswordException("Password too weak"))
                 .when(customerSelfService).changePassword(any());
@@ -80,7 +85,7 @@ class CustomerControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void changePassword_returnsConflictOnPasswordReuse() throws Exception {
         doThrow(new PasswordReusedException("Password recently used"))
                 .when(customerSelfService).changePassword(any());
@@ -94,7 +99,7 @@ class CustomerControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "CUSTOMER")
+    @WithBankUser(customerId = CALLER_ID)
     void changePassword_returnsNotFoundForUnknownCustomer() throws Exception {
         doThrow(new CustomerNotFoundException("Customer not found"))
                 .when(customerSelfService).changePassword(any());
