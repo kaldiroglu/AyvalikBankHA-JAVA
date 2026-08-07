@@ -15,18 +15,18 @@ Demonstrate how to apply hexagonal architecture to a real domain — a simplifie
 | Persistence | Spring Data JPA + PostgreSQL |
 | Security | Spring Security (HTTP Basic Auth) |
 | Validation | Jakarta Bean Validation |
-| Testing | JUnit 5 · AssertJ · Mockito · MockMvc |
+| Testing | JUnit 5 · AssertJ · Mockito · MockMvc · H2 (in-memory, `@DataJpaTest`) |
 | Build | Maven |
 | Infrastructure | Docker Compose (PostgreSQL) |
 
 ## Quick Start
 
 ```bash
-# Start PostgreSQL
-docker compose up -d
-
-# Build and run all tests
+# Build and run all tests - no database needed, tests use in-memory H2
 mvn clean verify
+
+# Start PostgreSQL (required only to run the application)
+docker compose up -d
 
 # Run the application
 mvn spring-boot:run

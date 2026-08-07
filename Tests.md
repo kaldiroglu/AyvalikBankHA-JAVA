@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-202 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+206 tests across 17 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -30,6 +30,38 @@ mvn test -Dtest=AccountControllerTest
       │                (no mocks, no Spring, no I/O)                 │  96 tests
       └──────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Persistence Tests
+
+### `AccountOptimisticLockingTest` — 3 tests
+
+**Class under test:** `adapter/out/persistence/entity/AccountJpaEntity.java` (`@Version`) and the
+save path it guards.
+
+The project's **first `@DataJpaTest`**. It runs against in-memory **H2**, which is faithful for this
+behavior because the optimistic-lock comparison is performed by Hibernate — in the
+`UPDATE ... WHERE version = ?` it generates — not by any database feature.
+
+**No threads, no sleeps, no retries.** A lost update is a *stale-read* problem, not a timing problem,
+so two persistence contexts committing in a fixed order reproduce it deterministically. The class is
+annotated `@Transactional(propagation = NOT_SUPPORTED)` so Spring does not wrap each test in a
+transaction that would roll back the fixture row and hide it from both contexts.
+
+| Test | What it verifies |
+|------|------------------|
+| `shouldPersistANewAccountAtVersionZero` | A freshly inserted account starts at version 0, so the insert path still works. |
+| `shouldIncrementTheVersionOnEachUpdate` | The version moves 0 → 1 → 2 across successive commits, proving the mechanism is actually engaged rather than merely annotated. |
+| `shouldRejectTheSecondWriterWhenBothLoadedTheSameVersion` | Two contexts load version 0; the first commit succeeds, the second throws `RollbackException` caused by `OptimisticLockException`. The final balance and version confirm the lost update was prevented. |
+
+Note the test asserts on the **middle** link of the exception chain: it is
+`RollbackException` → `OptimisticLockException` → `StaleObjectStateException`, and the middle type is
+both the JPA-portable one and what Spring translates into `OptimisticLockingFailureException` for the
+409 response.
+
+The test datasource lives in `src/test/resources/application.properties` and sets `NON_KEYWORDS=KEY`,
+because the `settings` table has a column named `key` that PostgreSQL permits and H2 reserves.
 
 ---
 
@@ -500,7 +532,7 @@ No real application service or database is involved. The goal is to verify:
 
 ---
 
-### `AccountControllerTest` — 22 tests
+### `AccountControllerTest` — 23 tests
 
 **Controller:** `adapter/in/web/AccountController.java` (`/api/accounts/**`, `/api/customers/**`)
 **Required role:** `ROLE_CUSTOMER`

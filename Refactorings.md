@@ -813,3 +813,163 @@ That test is worth more than the refactoring it guards.
 3. Entry 1 introduced `InsufficientBalanceException extends IllegalStateException`. This entry made
    it a subtype of a new sealed base. What would have had to change if entry 1 had chosen
    `RuntimeException` instead?
+
+---
+
+## Entry 5 — Optimistic locking: an ORM can only protect a row you actually loaded
+
+**Date:** 2026-08-07
+**Branch:** `refactor/optimistic-locking`
+**Baseline commit:** `3f92caa`
+**Principle:** a lost update is a stale-read problem, not a timing problem
+
+### The symptom
+
+Two withdrawals of 50 from a balance of 100, interleaved:
+
+| Step | Transaction A | Transaction B |
+|---|---|---|
+| 1 | `findById` → balance 100 | |
+| 2 | | `findById` → balance 100 |
+| 3 | `withdraw(50)` → 50 in memory | |
+| 4 | | `withdraw(50)` → 50 in memory |
+| 5 | `save` → row = 50 | |
+| 6 | | `save` → row = 50 (overwrites) |
+
+The balance ends at **50** where it should be **0**, and **both** `Transaction` rows are written. The
+ledger records two withdrawals; the balance reflects one. Money is created from nothing and the audit
+trail contradicts the account — the worst failure available to a bank.
+
+`grep -rn "@Version\|@Lock" src/main/java` returned nothing.
+
+### Why `@Version` alone would not have fixed it
+
+This is the part worth the entry.
+
+```java
+public Account save(Account account) {
+    var entity = mapper.toJpaEntity(account);   // a brand-new DETACHED object
+    var saved = repository.save(entity);        // merge → full-row overwrite
+    return mapper.toDomain(saved);
+}
+```
+
+`save` built a **fresh** entity on every call. Add `@Version` and its version field is null every
+time — Hibernate would treat the object as new, or fail unconditionally. Either way there is no
+optimistic check, just a different bug.
+
+> **An ORM can only protect a row you actually loaded.** The version is not a property of your
+> in-memory object; it is a claim about *which revision you read*. Rebuild the object and you throw
+> that claim away.
+
+The version survives in exactly one place: the **managed** entity in the persistence context, which
+the service's earlier `findById` already put there. So `save` had to stop replacing and start
+mutating:
+
+```java
+@Override
+public Account save(Account account) {
+    AccountJpaEntity entity = repository.findById(account.getId().value())
+            .map(managed -> { mapper.copyOnto(account, managed); return managed; })
+            .orElseGet(() -> mapper.toJpaEntity(account));
+    return mapper.toDomain(repository.save(entity));
+}
+```
+
+Because `AccountApplicationService` is `@Transactional`, that second `findById` is served from the
+first-level cache — no extra SELECT — and returns the instance carrying the version read at the start
+of the transaction. Hibernate then emits `UPDATE ... WHERE version = ?`, which matches no row if
+someone else committed first.
+
+The same change independently ends the blind full-row overwrite: Hibernate now updates the columns
+that actually changed.
+
+### The domain did not change at all
+
+Not one file under `domain/` was touched. `git status --short src/main/java/.../domain/` was empty at
+the end of the substantive commit, and that check is a step in the plan rather than an afterthought.
+
+A version is a persistence concern — a claim about a database row's revision. It is not a banking
+concept, and `Account` has no business holding one. The cost of that choice is precisely the
+managed-entity requirement above; the benefit is that the aggregate stays about money.
+
+Had the version been put on `Account`, every constructor, the mapper both ways, and every test that
+builds an account would have had to carry a field that means nothing to the business.
+
+### A concurrency test with no concurrency
+
+The test uses **no threads, no sleeps and no retries**, and is fully deterministic:
+
+```java
+EntityManager em1 = emf.createEntityManager();
+EntityManager em2 = emf.createEntityManager();
+// both begin a transaction and load the same account at version 0 — the stale read
+first.setBalance(new BigDecimal("50.00"));
+em1.getTransaction().commit();          // row moves to version 1
+second.setBalance(new BigDecimal("50.00"));
+assertThatThrownBy(() -> em2.getTransaction().commit())
+        .isInstanceOf(RollbackException.class)
+        .hasCauseInstanceOf(OptimisticLockException.class);
+```
+
+Two persistence contexts committing in a **fixed order** reproduce the bug exactly. That is the
+lesson: the failure was never about two things happening at the same instant. It was about the second
+writer acting on a revision that had already been superseded. Ordering, not timing.
+
+Anyone writing a flaky `Thread.sleep`-and-hope test for this has misdiagnosed the bug.
+
+Two mistakes were made getting the assertion right, and both are instructive. The exception chain is
+`RollbackException` → `OptimisticLockException` → `StaleObjectStateException`, so
+`hasRootCauseInstanceOf(OptimisticLockException.class)` fails — that type is the *middle* link, not
+the root. Assert on the middle link: it is the JPA-portable type, and it is what Spring translates
+into `OptimisticLockingFailureException`.
+
+### Two portability findings from the first test database
+
+This is the project's first `@DataJpaTest`, and standing one up surfaced two things worth recording.
+
+**`key` is reserved in H2 but not in PostgreSQL.** `SettingsJpaEntity` maps a column named `key`,
+which PostgreSQL accepts. H2 rejected the generated DDL outright. Fixed with `NON_KEYWORDS=KEY` on
+the test JDBC URL rather than by renaming the production column — the test database bends, not the
+schema.
+
+**H2 is faithful enough here on purpose.** The version comparison is performed by *Hibernate*, in the
+`WHERE version = ?` clause it generates, not by any database feature. That is why H2 is sufficient for
+this behavior and Testcontainers would only have bought slower feedback.
+
+### Where the 409 is produced, and why not in the service
+
+Hibernate raises the conflict when the transaction **commits** — inside the `@Transactional` proxy,
+*after* the application service method has already returned. The service physically cannot catch it.
+`GlobalExceptionHandler` maps `OptimisticLockingFailureException` to **409 Conflict**.
+
+The detail message is fixed rather than `ex.getMessage()`. Hibernate's text is
+`"Row was updated or deleted by another transaction ... [dev.kaldiroglu...AccountJpaEntity#<uuid>]"` —
+it names the entity class and primary key. A test asserts on `$.detail` specifically so that internal
+detail cannot start leaking later.
+
+### Scope
+
+| | |
+|---|---|
+| Modified | `AccountJpaEntity`, `AccountPersistenceMapper`, `AccountPersistenceAdapter`, `GlobalExceptionHandler`, `data.sql`, `Schema.sql`, `pom.xml` |
+| New | H2 (test scope), `src/test/resources/application.properties`, `AccountOptimisticLockingTest` |
+| **Domain files changed** | **none** |
+| Tests | 202 → 206 |
+
+### Deliberate non-goals
+
+- **`CustomerJpaEntity` has the same exposure.** Two concurrent password changes, or a tier change
+  racing a password change, lose an update identically. The same fix applies; left out to keep this
+  change reviewable.
+- **No retry-on-conflict.** A 409 tells the client to retry. Automatic server-side retry is a
+  separate design with its own idempotency questions — replaying a withdrawal is not obviously safe.
+
+### Discussion questions
+
+1. `save` calls `findById` before writing. Explain why this costs no extra SELECT, and what would
+   change if the application service were not `@Transactional`.
+2. The version lives on the entity, so the domain cannot express "I read revision 7". When would that
+   become a problem, and what would you do about it?
+3. The test proves the mechanism at the entity level. Write the test that would prove
+   `AccountApplicationService.withdraw` benefits from it — and say what infrastructure that needs.
