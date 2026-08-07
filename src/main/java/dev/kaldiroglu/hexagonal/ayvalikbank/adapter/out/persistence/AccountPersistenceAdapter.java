@@ -1,5 +1,6 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence;
 
+import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.entity.AccountJpaEntity;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.mapper.AccountPersistenceMapper;
 import dev.kaldiroglu.hexagonal.ayvalikbank.adapter.out.persistence.repository.AccountJpaRepository;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Account;
@@ -22,11 +23,28 @@ public class AccountPersistenceAdapter implements AccountRepositoryPort {
         this.mapper = mapper;
     }
 
+    /**
+     * Writes the account back, preserving the optimistic-lock version.
+     *
+     * <p>The entity is <b>not</b> rebuilt from scratch. Within the application service's
+     * transaction the earlier {@code findById} left a managed entity in the persistence context, and
+     * that instance carries the version loaded at the start of the transaction. Copying onto it lets
+     * Hibernate emit {@code UPDATE ... WHERE version = ?} and detect a concurrent write. Merging a
+     * freshly built detached entity would carry no version and silently overwrite the whole row —
+     * which is exactly how two concurrent withdrawals used to lose one of themselves.
+     *
+     * <p>The lookup costs no extra query: it is served by the persistence context's first-level
+     * cache. The {@code orElseGet} branch covers a genuinely new account, where no row exists yet.
+     */
     @Override
     public Account save(Account account) {
-        var entity = mapper.toJpaEntity(account);
-        var saved = repository.save(entity);
-        return mapper.toDomain(saved);
+        AccountJpaEntity entity = repository.findById(account.getId().value())
+                .map(managed -> {
+                    mapper.copyOnto(account, managed);
+                    return managed;
+                })
+                .orElseGet(() -> mapper.toJpaEntity(account));
+        return mapper.toDomain(repository.save(entity));
     }
 
     @Override

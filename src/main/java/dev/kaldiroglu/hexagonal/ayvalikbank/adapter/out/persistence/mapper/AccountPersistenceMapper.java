@@ -40,6 +40,20 @@ public class AccountPersistenceMapper {
     public AccountJpaEntity toJpaEntity(Account account) {
         AccountJpaEntity entity = new AccountJpaEntity();
         entity.setId(account.getId().value());
+        copyOnto(account, entity);
+        return entity;
+    }
+
+    /**
+     * Copies every mutable column from the domain object onto an existing entity.
+     *
+     * <p>Never touches {@code id} or {@code version}. The id is immutable; the version belongs to
+     * Hibernate, and overwriting it would defeat the optimistic-lock check this exists to support.
+     *
+     * <p>The switch stays exhaustive over the sealed {@code Account} hierarchy — no {@code default},
+     * so a fourth account product breaks the build here until it is mapped.
+     */
+    public void copyOnto(Account account, AccountJpaEntity entity) {
         entity.setOwnerId(account.getOwnerId().value());
         entity.setCurrency(account.getCurrency().name());
         entity.setBalance(account.getBalance().amount());
@@ -59,6 +73,5 @@ public class AccountPersistenceMapper {
                 entity.setMatured(t.isMatured());
             }
         }
-        return entity;
     }
 }
