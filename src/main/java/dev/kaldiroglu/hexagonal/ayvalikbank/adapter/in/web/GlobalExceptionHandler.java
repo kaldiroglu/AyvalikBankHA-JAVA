@@ -2,6 +2,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOperableException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -54,6 +55,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnauthorizedAccessException.class)
     public ProblemDetail handleUnauthorized(UnauthorizedAccessException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    /**
+     * Two operations modified the same account concurrently and the second one lost.
+     *
+     * <p>Hibernate raises this at transaction commit — inside the {@code @Transactional} proxy and
+     * therefore <i>after</i> the application service method has already returned — so the service
+     * cannot catch it. The handler is the only place that can map it.
+     *
+     * <p>The detail is fixed rather than {@code ex.getMessage()}: Hibernate's text names the entity
+     * class and primary key, which is internal detail that should not reach a client.
+     *
+     * <p>Catching Spring's {@code OptimisticLockingFailureException} base covers
+     * {@code ObjectOptimisticLockingFailureException} and any other subtype.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail handleConcurrentModification(OptimisticLockingFailureException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "The account was modified by another operation. Please retry.");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -8,10 +8,12 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -392,5 +394,23 @@ class AccountControllerTest {
                 ArgumentCaptor.forClass(CustomerAccountPort.OpenCheckingCommand.class);
         verify(customerAccount).openChecking(captor.capture());
         assertThat(captor.getValue().callerId()).isEqualTo(CALLER);
+    }
+
+    @Test
+    @WithBankUser(customerId = CALLER_ID)
+    @DisplayName("a concurrent modification is reported as 409, without leaking entity internals")
+    void deposit_returnsConflictOnOptimisticLockFailure() throws Exception {
+        doThrow(new ObjectOptimisticLockingFailureException(
+                        "dev.kaldiroglu.hexagonal.ayvalikbank...AccountJpaEntity", UUID.randomUUID()))
+                .when(customerAccount).deposit(any());
+
+        mockMvc.perform(post("/api/accounts/{id}/deposit", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":50.00,"currency":"USD"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail")
+                        .value("The account was modified by another operation. Please retry."));
     }
 }
