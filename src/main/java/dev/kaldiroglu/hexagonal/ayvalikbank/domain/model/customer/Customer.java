@@ -4,6 +4,23 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Aggregate root of the Customer aggregate.
+ *
+ * <p>Represents a person or legal entity with a relationship to the bank — they own
+ * {@link dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.Account accounts}, log in
+ * via Basic Auth using their {@link #email} and current {@link Password}, and are placed in a
+ * {@link CustomerTier} that governs their fees and per-transaction limits.
+ *
+ * <h2>Password history (reuse prevention)</h2>
+ * The aggregate keeps the {@link #currentPassword} plus up to {@value #PASSWORD_HISTORY_SIZE}
+ * previous {@link Password} hashes. When the customer changes their password, the application
+ * service consults {@link #getAllPasswordsForReuseCheck()} via the {@code PasswordHasherPort} to
+ * reject reuse of any of the recent hashes. The aggregate itself owns only the rotation
+ * mechanics (push current → history\[0], drop the oldest if size exceeds the cap); format
+ * validation lives in {@code PasswordValidationService} and reuse-checking lives in the
+ * application service (because it needs the outbound port).
+ */
 public class Customer {
     private static final int PASSWORD_HISTORY_SIZE = 3;
 

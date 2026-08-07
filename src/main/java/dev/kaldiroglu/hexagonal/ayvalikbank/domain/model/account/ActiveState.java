@@ -1,5 +1,13 @@
 package dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account;
 
+/**
+ * The "happy path" account state — all customer operations are permitted.
+ *
+ * <p>Valid transitions: <b>{@code → FrozenState}</b> via {@link #freeze()},
+ *                       <b>{@code → ClosedState}</b> via {@link #close()}.
+ * Invalid: {@link #unfreeze()} (already active).
+ * Stateless singleton — there is only one instance, {@link #INSTANCE}.
+ */
 public final class ActiveState implements AccountState {
 
     public static final ActiveState INSTANCE = new ActiveState();

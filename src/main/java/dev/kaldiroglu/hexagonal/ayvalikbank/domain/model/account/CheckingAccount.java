@@ -2,8 +2,32 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 
+/**
+ * A <b>checking account</b> — the everyday transactional account customers use for
+ * incoming salary, outgoing bills, card payments, and transfers.
+ *
+ * <p>Distinguishing feature: an {@link #overdraftLimit overdraft limit}. Withdrawals and
+ * outbound transfers may take the balance <i>negative</i>, down to {@code -overdraftLimit}.
+ * For example, with a $500 overdraft limit, a customer with $100 in the account can withdraw
+ * up to $600 — leaving the balance at $-500. Anything beyond that is rejected as
+ * {@code Insufficient funds} (or {@code Withdrawal exceeds overdraft limit} when the limit is non-zero).
+ *
+ * <p>An overdraft limit of {@link Money#zero(Currency) zero} means the account behaves like a
+ * "no-overdraft" checking account — the balance cannot go below zero.
+ *
+ * <p>Unlike {@link SavingsAccount}, no interest is paid on the balance.
+ * Unlike {@link TimeDepositAccount}, money flows freely in and out at any time.
+ *
+ * @see SavingsAccount     for an interest-bearing alternative without overdraft
+ * @see TimeDepositAccount for a fixed-term locked deposit
+ */
 public final class CheckingAccount extends Account {
 
+    /**
+     * Maximum amount by which the balance may go negative.
+     * Always non-negative and in the same currency as the account.
+     * A value of zero disables overdraft entirely (hard floor at zero balance).
+     */
     private final Money overdraftLimit;
 
     public CheckingAccount(AccountId id, CustomerId ownerId, Currency currency,

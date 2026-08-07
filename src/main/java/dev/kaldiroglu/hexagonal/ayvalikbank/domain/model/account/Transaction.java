@@ -2,6 +2,17 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account;
 
 import java.time.LocalDateTime;
 
+/**
+ * Immutable record of one financial event on an {@link Account}.
+ *
+ * <p>Transactions are append-only — a {@code Transaction} object, once created, is never modified.
+ * Editing the past is not how a ledger works; corrections are made with compensating transactions.
+ *
+ * <p>Each {@link Account} mutating operation ({@link Account#deposit}, {@link Account#withdraw},
+ * {@link Account#transferOut}, {@link Account#transferIn}, savings accrual, time-deposit maturation)
+ * returns one of these so the application service can persist it via
+ * {@code TransactionRepositoryPort}.
+ */
 public class Transaction {
     private final TransactionId id;
     private final AccountId accountId;

@@ -3,6 +3,17 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
+/**
+ * A <b>monetary amount</b> — an amount paired with the {@link Currency} it is denominated in.
+ * Immutable value object.
+ *
+ * <p>All arithmetic ({@link #add}, {@link #subtract}, {@link #multiply}) is currency-checked:
+ * mixing two different currencies throws {@link IllegalArgumentException}.
+ *
+ * <p>Stored at <b>2-decimal precision</b> using {@link RoundingMode#HALF_UP HALF_UP} rounding,
+ * matching how banking systems persist cash amounts (cents, kuruş, etc.). Negative values are
+ * allowed — they are required to model overdrafts on {@link CheckingAccount}.
+ */
 public record Money(BigDecimal amount, Currency currency) {
 
     public Money {
@@ -63,4 +74,5 @@ public record Money(BigDecimal amount, Currency currency) {
     public String toString() {
         return amount.toPlainString() + " " + currency;
     }
+
 }
