@@ -15,9 +15,12 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account;
  * exception it is translated into. Two identically-named classes in different layers would make
  * every import ambiguous.
  *
+ * <p>One of the four {@link AccountRuleViolation} subtypes. It remains an
+ * {@link IllegalStateException} by inheritance, so nothing that caught it before is affected.
+ *
  * @see dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException
  */
-public class InsufficientBalanceException extends IllegalStateException {
+public final class InsufficientBalanceException extends AccountRuleViolation {
     public InsufficientBalanceException(String message) {
         super(message);
     }
