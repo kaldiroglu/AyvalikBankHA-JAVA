@@ -8,6 +8,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerSelfServicePort;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -131,5 +133,24 @@ class CustomerControllerTest {
                                 {"newPassword":"Valid@123"}
                                 """))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithBankUser(customerId = CALLER_ID)
+    void changePassword_forwardsBothTheCallerAndTheSubject() throws Exception {
+        mockMvc.perform(put("/api/customers/{id}/password", OTHER_CUSTOMER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"newPassword":"NewPass@123!"}
+                                """))
+                .andExpect(status().isOk());
+
+        // The controller forwards faithfully; refusing is the service's job, covered by
+        // CustomerApplicationServiceTest.shouldRejectChangingAnotherCustomersPassword.
+        ArgumentCaptor<CustomerSelfServicePort.ChangePasswordCommand> captor =
+                ArgumentCaptor.forClass(CustomerSelfServicePort.ChangePasswordCommand.class);
+        verify(customerSelfService).changePassword(captor.capture());
+        assertThat(captor.getValue().callerId()).isEqualTo(CALLER);
+        assertThat(captor.getValue().customerId()).isEqualTo(CustomerId.of(OTHER_CUSTOMER_ID));
     }
 }

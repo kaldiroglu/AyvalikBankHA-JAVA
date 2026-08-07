@@ -3,6 +3,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidPasswordException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReusedException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.UnauthorizedAccessException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.CustomerId;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Password;
@@ -59,6 +60,11 @@ public class CustomerApplicationService implements
 
     @Override
     public void changePassword(ChangePasswordCommand command) {
+        // Checked BEFORE the lookup, so a caller cannot probe which customer ids exist by
+        // distinguishing 404 from 403.
+        if (!command.customerId().equals(command.callerId()))
+            throw new UnauthorizedAccessException("Callers may only change their own password");
+
         Customer customer = customerRepository.findById(command.customerId())
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + command.customerId()));
 

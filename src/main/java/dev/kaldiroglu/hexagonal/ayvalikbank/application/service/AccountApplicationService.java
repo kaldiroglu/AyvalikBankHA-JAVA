@@ -6,6 +6,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFou
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.LimitExceededException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.UnauthorizedAccessException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.AccountAdministrationPort;
@@ -77,6 +78,7 @@ public class AccountApplicationService implements
     @Override
     public Transaction deposit(DepositCommand command) {
         Account account = findAccountOrThrow(command.accountId());
+        requireOwner(account, command.callerId());
         Transaction tx;
         try {
             tx = account.deposit(command.amount());
@@ -90,6 +92,7 @@ public class AccountApplicationService implements
     @Override
     public Transaction withdraw(WithdrawCommand command) {
         Account account = findAccountOrThrow(command.accountId());
+        requireOwner(account, command.callerId());
         Customer owner = findCustomerOrThrow(account.getOwnerId());
         try {
             transferDomainService.requireWithdrawalWithinLimit(command.amount(), owner.getTier());
@@ -111,13 +114,15 @@ public class AccountApplicationService implements
     @Override
     @Transactional(readOnly = true)
     public Money getBalance(CustomerId callerId, AccountId accountId) {
-        return findAccountOrThrow(accountId).getBalance();
+        Account account = findAccountOrThrow(accountId);
+        requireOwner(account, callerId);
+        return account.getBalance();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Transaction> getTransactions(CustomerId callerId, AccountId accountId) {
-        findAccountOrThrow(accountId);
+        requireOwner(findAccountOrThrow(accountId), callerId);
         return transactionRepository.findByAccountId(accountId);
     }
 
@@ -125,6 +130,11 @@ public class AccountApplicationService implements
     public void transfer(TransferCommand command) {
         Account source = findAccountOrThrow(command.sourceAccountId());
         Account target = findAccountOrThrow(command.targetAccountId());
+        requireOwner(source, command.callerId());
+        // The TARGET is deliberately not ownership-checked: sending money to another customer is
+        // the entire point of a transfer. shouldAllowTransferToAnotherCustomersAccount pins this,
+        // so "tightening" the check to cover both accounts fails loudly instead of silently
+        // breaking the product.
         Customer sourceOwner = findCustomerOrThrow(source.getOwnerId());
 
         try {
@@ -156,6 +166,7 @@ public class AccountApplicationService implements
     @Override
     @Transactional(readOnly = true)
     public List<Account> listAccounts(CustomerId callerId, CustomerId ownerId) {
+        requireSelf(ownerId, callerId);
         requireCustomerExists(ownerId);
         return accountRepository.findByOwnerId(ownerId);
     }
@@ -213,6 +224,25 @@ public class AccountApplicationService implements
         if (command.feePercent().compareTo(BigDecimal.ZERO) < 0)
             throw new IllegalArgumentException("Transfer fee percent cannot be negative");
         settingsRepository.setTransferFeePercent(command.feePercent());
+    }
+
+    /**
+     * The caller must own the account. The domain supplies the fact via
+     * {@link Account#isOwnedBy}; deciding to refuse is an application concern, because a "caller"
+     * is a session notion the domain knows nothing about.
+     *
+     * <p>The message names neither the account nor its owner — an error response is not the place
+     * to confirm which accounts exist.
+     */
+    private void requireOwner(Account account, CustomerId callerId) {
+        if (!account.isOwnedBy(callerId))
+            throw new UnauthorizedAccessException("Account does not belong to the caller");
+    }
+
+    /** The caller may only act on their own customer record. */
+    private void requireSelf(CustomerId subject, CustomerId callerId) {
+        if (!subject.equals(callerId))
+            throw new UnauthorizedAccessException("Callers may only act on their own customer record");
     }
 
     private void requireCustomerExists(CustomerId id) {

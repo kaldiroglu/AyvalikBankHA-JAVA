@@ -5,6 +5,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotOper
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidAccountOperationException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.UnauthorizedAccessException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.LimitExceededException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.AccountAdministrationPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.BankSettingsPort;
@@ -17,6 +18,7 @@ import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.SettingsRepo
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.port.out.account.TransactionRepositoryPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.service.account.TransferDomainService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -388,5 +390,95 @@ class AccountApplicationServiceTest {
                 .hasMessageContaining("cannot be negative");
 
         verifyNoInteractions(settingsRepository);
+    }
+
+    // ── ownership ─────────────────────────────────────────────────────────
+
+    @Test
+    void shouldRejectDepositIntoAnotherCustomersAccount() {
+        CustomerId intruder = CustomerId.generate();
+        Account account = CheckingAccount.open(CustomerId.generate(), Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.deposit(new CustomerAccountPort.DepositCommand(
+                intruder, account.getId(), TransactionAmount.of(100.0, Currency.USD))))
+                .isInstanceOf(UnauthorizedAccessException.class);
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectWithdrawalFromAnotherCustomersAccount() {
+        CustomerId intruder = CustomerId.generate();
+        Account account = CheckingAccount.open(CustomerId.generate(), Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.withdraw(new CustomerAccountPort.WithdrawCommand(
+                intruder, account.getId(), TransactionAmount.of(10.0, Currency.USD))))
+                .isInstanceOf(UnauthorizedAccessException.class);
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectTransferFromAnotherCustomersAccount() {
+        CustomerId intruder = CustomerId.generate();
+        Account source = CheckingAccount.open(CustomerId.generate(), Currency.USD);
+        Account target = CheckingAccount.open(intruder, Currency.USD);
+        when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> service.transfer(new CustomerAccountPort.TransferCommand(
+                intruder, source.getId(), target.getId(), TransactionAmount.of(10.0, Currency.USD))))
+                .isInstanceOf(UnauthorizedAccessException.class);
+
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("the transfer target is deliberately NOT ownership-checked - sending money to other people is the point")
+    void shouldAllowTransferToAnotherCustomersAccount() {
+        CustomerId sender = CustomerId.generate();
+        CustomerId recipient = CustomerId.generate();
+        Account source = CheckingAccount.open(sender, Currency.USD);
+        source.deposit(TransactionAmount.of(500.0, Currency.USD));
+        Account target = CheckingAccount.open(recipient, Currency.USD);
+        when(accountRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        when(accountRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(customerRepository.findById(sender)).thenReturn(Optional.of(stubCustomer(sender, CustomerTier.STANDARD)));
+        when(settingsRepository.getTransferFeePercent()).thenReturn(new BigDecimal("1.0"));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.transfer(new CustomerAccountPort.TransferCommand(
+                sender, source.getId(), target.getId(), TransactionAmount.of(100.0, Currency.USD)));
+
+        assertThat(target.getBalance().amount()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void shouldRejectBalanceReadOnAnotherCustomersAccount() {
+        Account account = CheckingAccount.open(CustomerId.generate(), Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.getBalance(CustomerId.generate(), account.getId()))
+                .isInstanceOf(UnauthorizedAccessException.class);
+    }
+
+    @Test
+    void shouldRejectTransactionHistoryOnAnotherCustomersAccount() {
+        Account account = CheckingAccount.open(CustomerId.generate(), Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> service.getTransactions(CustomerId.generate(), account.getId()))
+                .isInstanceOf(UnauthorizedAccessException.class);
+    }
+
+    @Test
+    void shouldRejectListingAnotherCustomersAccounts() {
+        assertThatThrownBy(() -> service.listAccounts(CustomerId.generate(), CustomerId.generate()))
+                .isInstanceOf(UnauthorizedAccessException.class);
+
+        verifyNoInteractions(accountRepository);
     }
 }

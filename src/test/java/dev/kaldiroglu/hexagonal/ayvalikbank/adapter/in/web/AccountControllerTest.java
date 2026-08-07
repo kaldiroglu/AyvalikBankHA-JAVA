@@ -2,12 +2,14 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.adapter.in.web;
 
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.AccountNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InsufficientFundsException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.UnauthorizedAccessException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.account.CustomerAccountPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.BankUserDetailsService;
 import dev.kaldiroglu.hexagonal.ayvalikbank.config.SecurityConfig;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.account.*;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.*;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -21,6 +23,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -334,5 +337,60 @@ class AccountControllerTest {
     void getTransactions_returnsUnauthorizedWithoutCredentials() throws Exception {
         mockMvc.perform(get("/api/accounts/{id}/transactions", UUID.randomUUID()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ── the controller's own job: forward the authenticated caller ────────
+
+    @Test
+    @WithBankUser(customerId = CALLER_ID)
+    void deposit_passesTheAuthenticatedCallerIntoTheCommand() throws Exception {
+        Transaction tx = Transaction.create(AccountId.generate(), TransactionType.DEPOSIT,
+                Money.of(50.0, Currency.USD), "Deposit");
+        when(customerAccount.deposit(any())).thenReturn(tx);
+
+        mockMvc.perform(post("/api/accounts/{id}/deposit", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":50.00,"currency":"USD"}
+                                """))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<CustomerAccountPort.DepositCommand> captor =
+                ArgumentCaptor.forClass(CustomerAccountPort.DepositCommand.class);
+        verify(customerAccount).deposit(captor.capture());
+        assertThat(captor.getValue().callerId()).isEqualTo(CALLER);
+    }
+
+    @Test
+    @WithBankUser(customerId = CALLER_ID)
+    void deposit_returnsForbiddenWhenTheServiceDeniesAccess() throws Exception {
+        doThrow(new UnauthorizedAccessException("Account does not belong to the caller"))
+                .when(customerAccount).deposit(any());
+
+        mockMvc.perform(post("/api/accounts/{id}/deposit", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount":50.00,"currency":"USD"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithBankUser(customerId = CALLER_ID)
+    void openChecking_opensTheAccountForTheAuthenticatedCaller() throws Exception {
+        when(customerAccount.openChecking(any()))
+                .thenReturn(CheckingAccount.open(CALLER, Currency.USD));
+
+        mockMvc.perform(post("/api/accounts/checking")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currency":"USD"}
+                                """))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<CustomerAccountPort.OpenCheckingCommand> captor =
+                ArgumentCaptor.forClass(CustomerAccountPort.OpenCheckingCommand.class);
+        verify(customerAccount).openChecking(captor.capture());
+        assertThat(captor.getValue().callerId()).isEqualTo(CALLER);
     }
 }

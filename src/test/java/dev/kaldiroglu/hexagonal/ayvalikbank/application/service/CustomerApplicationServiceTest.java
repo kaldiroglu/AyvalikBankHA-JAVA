@@ -3,6 +3,7 @@ package dev.kaldiroglu.hexagonal.ayvalikbank.application.service;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.CustomerNotFoundException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.InvalidPasswordException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.PasswordReusedException;
+import dev.kaldiroglu.hexagonal.ayvalikbank.application.exception.UnauthorizedAccessException;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerAdministrationPort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.application.port.in.customer.CustomerSelfServicePort;
 import dev.kaldiroglu.hexagonal.ayvalikbank.domain.model.customer.Customer;
@@ -131,5 +132,17 @@ class CustomerApplicationServiceTest {
         assertThatThrownBy(() -> service.changeCustomerTier(
                 new CustomerAdministrationPort.ChangeCustomerTierCommand(id, CustomerTier.PREMIUM)))
                 .isInstanceOf(CustomerNotFoundException.class);
+    }
+
+    @Test
+    void shouldRejectChangingAnotherCustomersPassword() {
+        CustomerId caller = CustomerId.generate();
+        CustomerId victim = CustomerId.generate();
+
+        assertThatThrownBy(() -> service.changePassword(
+                new CustomerSelfServicePort.ChangePasswordCommand(caller, victim, "NewPass@123!")))
+                .isInstanceOf(UnauthorizedAccessException.class);
+
+        verifyNoInteractions(customerRepository);
     }
 }
