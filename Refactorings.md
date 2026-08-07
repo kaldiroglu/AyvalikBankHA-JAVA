@@ -455,3 +455,183 @@ afterwards, in their own commit, so the signal stayed clean.
    layout — what does it buy?
 3. `AccountApplicationService` still implements three ports and serves two different actors. Should
    it be split? What would decide it?
+
+---
+
+## Entry 3 — Ownership authorization: a rule that could not be said
+
+**Date:** 2026-08-07
+**Branch:** `refactor/ownership-authorization`
+**Baseline commit:** `25a4ea2`
+**Principle:** a rule the types cannot express is a rule that will go missing
+
+### The symptom
+
+Three holes, all the same shape.
+
+**1. Account takeover.** `PUT /api/customers/{customerId}/password` read its target from the path,
+and `SecurityConfig` gated `/api/customers/**` on `hasRole("CUSTOMER")` and nothing else. Any
+customer could set any other customer's password, then log in as them.
+
+**2. No ownership check anywhere on accounts.** Given an account id, any authenticated customer
+could deposit to it, withdraw from it, transfer out of it, read its balance and read its full
+transaction history.
+
+**3. Accounts opened for other people.** `POST /api/accounts/checking?ownerId={id}` took the owner
+as a request parameter and never compared it to the caller.
+
+### The tell
+
+`UnauthorizedAccessException` existed. `GlobalExceptionHandler` mapped it to HTTP 403. **No
+production code threw it.**
+
+```bash
+grep -rn "throw new UnauthorizedAccessException" src/main/java   # before: no matches
+```
+
+That is the third instance of one pattern in this codebase, after entry 1's never-thrown
+`InsufficientFundsException` and entry 2's untested fee guard. The lesson has earned generalization:
+
+> **An exception nothing throws is a rule nothing enforces.** Handlers are cheap to write and easy
+> to leave orphaned. Grepping for exception types that appear only in a handler and a test is a
+> two-minute audit that finds real holes.
+
+### The root cause
+
+Not one customer-facing `Command` carried the caller:
+
+```java
+record DepositCommand(AccountId accountId, TransactionAmount amount) {}
+record ChangePasswordCommand(CustomerId customerId, String rawNewPassword) {}
+```
+
+There was no caller to compare against, so "the caller must own this account" was not merely
+unenforced — it was **inexpressible**.
+
+This is entry 1 running in reverse, and the pairing is the most useful thing in this document:
+
+| | Entry 1 | Entry 3 |
+|---|---|---|
+| The types made… | a wrong state impossible | a right rule impossible |
+| Result | the bug could not be written | the rule could not be written |
+| Fix | add a type that carries the constraint | add a parameter that carries the subject |
+
+A signature is a statement about what an operation is allowed to consider. Leave something out and
+no amount of care downstream can put it back.
+
+### Fact versus policy
+
+The rule splits into two halves that belong in different layers:
+
+```java
+// domain — Account already knows its owner
+public final boolean isOwnedBy(CustomerId customerId) {
+    return this.ownerId.equals(customerId);
+}
+
+// application — deciding to refuse
+private void requireOwner(Account account, CustomerId callerId) {
+    if (!account.isOwnedBy(callerId))
+        throw new UnauthorizedAccessException("Account does not belong to the caller");
+}
+```
+
+Ownership is a domain fact; a *caller* is a session notion the domain has no business knowing. Keeping
+the split means `isOwnedBy` is tested with two plain `CustomerId` values and no security framework
+at all.
+
+### Three enforcement shapes, deliberately different
+
+| Situation | Technique | Where |
+|---|---|---|
+| The resource *is* the caller's | **Delete the parameter** | the three `open*` endpoints |
+| The path names a customer | **Require self** | `listAccounts`, `changePassword` |
+| The path names an account | **Require ownership** | deposit, withdraw, transfer, balance, transactions |
+
+The first is entry 1's move applied to security. Rather than validating `ownerId == caller`,
+`ownerId` was removed — the caller *is* the owner, so opening an account for somebody else can no
+longer be expressed. This is the one breaking API change in the work:
+
+```
+POST /api/accounts/checking?ownerId=<id>   →   POST /api/accounts/checking
+```
+
+**Prefer deleting a parameter to validating it.** A validated parameter still has to be validated
+everywhere, forever; a deleted one is gone.
+
+### The transfer asymmetry
+
+The caller must own the **source**. The target is deliberately unchecked — sending money to other
+people is the entire product.
+
+```java
+requireOwner(source, command.callerId());
+// The TARGET is deliberately not ownership-checked.
+```
+
+`shouldAllowTransferToAnotherCustomersAccount` exists solely to pin this. It is the most valuable
+test in the change: the obvious-looking hardening — "the caller must own both accounts" — reads as
+correct in review and breaks transfers entirely. A test that asserts something is *deliberately not
+checked* is the only thing standing between that edit and production.
+
+### Probing, and 403 versus 404
+
+`changePassword` checks the caller **before** the repository lookup, so a caller cannot learn which
+customer ids exist by distinguishing "not found" from "not yours".
+
+The account paths accept a weaker position, recorded here rather than hidden: a non-existent account
+returns 404 while somebody else's returns 403, which does distinguish the two. Returning 404 for both
+is the hardened choice. This codebase keeps 403 because it reads more clearly as teaching material,
+and account ids are random UUIDs, so enumeration is impractical.
+
+### The cost landed in the test fixtures
+
+`@WithMockUser` builds a plain Spring `User`. Once a controller declares
+`@AuthenticationPrincipal BankUserPrincipal caller`, that argument resolves to `null` under it — so
+**22 annotations across two test classes had to be replaced** with a purpose-built `@WithBankUser`
+plus a `WithSecurityContextFactory`.
+
+`AdminControllerTest`'s four `@WithMockUser(roles = "CUSTOMER")` tests were deliberately left alone:
+they assert Spring Security rejects a customer on an admin route *before* any controller runs, so
+they need no principal.
+
+A security fix whose production diff is small can still carry most of its weight in test
+infrastructure. Budget for that.
+
+### Where each rule is tested, and why
+
+The design document originally called for controller tests named
+`deposit_returnsForbiddenWhenAccountNotOwned`. **Those cannot work.** `AccountControllerTest` is a
+`@WebMvcTest` with `CustomerAccountPort` mocked, and the rule lives in `AccountApplicationService` —
+the mocked object. Such a test proves only that a mock configured to throw does throw. Writing it
+would have reproduced entry 1's defect 2 exactly, while this same file documents it.
+
+| Layer | Its actual job | How it is tested |
+|---|---|---|
+| Controller | Put the caller's id in the command | `ArgumentCaptor`, assert `command.callerId()` |
+| Controller | Map the exception to 403 | Stub the port to throw; assert the status |
+| Application service | Decide whether the caller may proceed | Real service, mocked repositories |
+| Domain | Answer "is this owned by X?" | Plain JUnit on `Account` |
+
+**Test each layer against its neighbor's real output, not against your assumption about it.**
+
+### Scope
+
+| | |
+|---|---|
+| New | `BankUserPrincipal`, `@WithBankUser` + factory, `Account.isOwnedBy` |
+| Behavior changes | 3 endpoints lose `?ownerId=`; cross-customer operations now return 403 |
+| Untouched | persistence, `SecurityConfig` route rules, `GlobalExceptionHandler`, all three admin ports, `AdminController` |
+| Tests | 186 → 200 |
+
+Checkpoints held at every step: 186 → 188 (`isOwnedBy`) → 188 → 188 → 188 (principal, fixture and
+caller-threading, all behaviorally inert) → 196 → 200. Four consecutive no-op commits are what makes
+the fifth one's diff readable as *only* the security change.
+
+### Discussion questions
+
+1. `requireOwner` is a private method on the application service. Argue for making it a named
+   collaborator instead — what would that buy, and what would it cost?
+2. The 403/404 distinction leaks which account ids exist. Change it to 404-for-both. Which tests
+   break, and what does that tell you about where the decision is encoded?
+3. Entries 1 and 3 are the same lesson mirrored. State it as a single rule that covers both.

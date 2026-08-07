@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-186 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+200 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -30,6 +30,32 @@ mvn test -Dtest=AccountControllerTest
       │                (no mocks, no Spring, no I/O)                 │  96 tests
       └──────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Security Fixtures
+
+Controller tests for customer-facing endpoints use **`@WithBankUser(customerId = ...)`**, not
+`@WithMockUser`.
+
+`@WithMockUser` builds a plain Spring `User`. Controllers declare
+`@AuthenticationPrincipal BankUserPrincipal caller` to read the caller's `CustomerId`, and that
+argument resolves to `null` under a plain `User` — so any test of an endpoint that reads the caller
+must supply a real principal. `WithBankUserSecurityContextFactory` does that.
+
+Because annotation values must be compile-time constants, these tests declare
+`static final String CALLER_ID` rather than calling `CustomerId.generate()`. That is what those
+tests need anyway: a *stable* identity to assert the principal was forwarded correctly.
+
+`AdminControllerTest` deliberately keeps `@WithMockUser(roles = "CUSTOMER")` for its four
+role-separation tests — those requests are rejected by Spring Security before any controller runs,
+so no principal is involved.
+
+**Where authorization is tested.** The ownership rule lives in the application services, so that is
+where it is tested with real services and mocked repositories. Controller tests cannot test it — the
+port they would assert through is the mock. They instead verify the controller's own two jobs via
+`ArgumentCaptor`: that the authenticated caller reaches the command, and that
+`UnauthorizedAccessException` maps to 403.
 
 ---
 
@@ -78,7 +104,7 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 
 ---
 
-### `AccountTest` — 21 tests
+### `AccountTest` — 23 tests
 
 **Class under test:** `domain/model/account/Account.java` (entity)
 
@@ -281,7 +307,7 @@ These tests cover the orchestration layer. All repository and infrastructure por
 
 ---
 
-### `CustomerApplicationServiceTest` — 8 tests
+### `CustomerApplicationServiceTest` — 9 tests
 
 **Class under test:** `application/service/CustomerApplicationService.java`
 
@@ -301,7 +327,7 @@ These tests cover the orchestration layer. All repository and infrastructure por
 
 ---
 
-### `AccountApplicationServiceTest` — 23 tests
+### `AccountApplicationServiceTest` — 30 tests
 
 **Class under test:** `application/service/AccountApplicationService.java`
 
@@ -453,7 +479,7 @@ No real application service or database is involved. The goal is to verify:
 
 ---
 
-### `CustomerControllerTest` — 7 tests
+### `CustomerControllerTest` — 8 tests
 
 **Controller:** `adapter/in/web/CustomerController.java` (`/api/customers/**`)
 **Required role:** `ROLE_CUSTOMER`
@@ -472,7 +498,7 @@ No real application service or database is involved. The goal is to verify:
 
 ---
 
-### `AccountControllerTest` — 19 tests
+### `AccountControllerTest` — 22 tests
 
 **Controller:** `adapter/in/web/AccountController.java` (`/api/accounts/**`, `/api/customers/**`)
 **Required role:** `ROLE_CUSTOMER`

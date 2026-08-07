@@ -33,7 +33,7 @@ adapter/out/security/          → BCryptPasswordHasherAdapter
 application/port/in/account/   → CustomerAccountPort, AccountAdministrationPort, BankSettingsPort (driving)
 application/port/in/customer/  → CustomerAdministrationPort, CustomerSelfServicePort (driving)
 application/service/           → CustomerApplicationService, AccountApplicationService
-config/                        → SecurityConfig (Spring beans), BankUserDetailsService
+config/                        → SecurityConfig (Spring beans), BankUserDetailsService, BankUserPrincipal
 domain/model/account/          → Account hierarchy (sealed) + AccountState pattern + Money, Currency, Transaction, AccountId/Type/Status
 domain/model/customer/         → Customer, CustomerId, Password
 domain/service/account/        → TransferDomainService
@@ -49,6 +49,7 @@ Each layer is split per aggregate (`account` vs `customer`) — model, service, 
 ## Key Design Decisions
 
 - **Value objects as records**: `CustomerId`, `AccountId`, `TransactionId`, `Money`, `TransactionAmount`, `Password` — immutable, self-validating.
+- **Ownership authorization**: every customer-facing `Command` carries `CustomerId callerId`, supplied by `BankUserPrincipal` through `@AuthenticationPrincipal`. `Account.isOwnedBy` is the domain **fact**; the application services enforce the **policy** and throw `UnauthorizedAccessException` → HTTP 403. Transfers check the **source only** — the target is deliberately unchecked, since sending money to another customer is the point. Opening an account takes no `ownerId`: the caller is the owner. See `Refactorings.md` entry 3.
 - **Actor-shaped ports**: driving ports are grouped by *actor × subject*, not one per method — `CustomerAccountPort` (9 methods), `AccountAdministrationPort` (5), `CustomerAdministrationPort` (4), `CustomerSelfServicePort` (1), `BankSettingsPort` (1). A port is one conversation with one kind of outside actor (Cockburn), which is why `AccountController` takes a single constructor parameter. See `Refactorings.md` entry 2.
 - **Port placement is deliberately asymmetric**: the domain declares the interfaces it *requires* (driven ports, `domain/port/out/`); the application declares the operations it *offers* (driving ports, `application/port/in/`). A `Command` record is a request shape, not a domain concept.
 - **`TransactionAmount` vs `Money`**: `Money` is signed — a negative balance is a real overdraft position, and `Money.negate()` builds the overdraft floor — so `Money` cannot enforce positivity. `TransactionAmount` wraps `Money` and is **strictly positive by construction** (zero is rejected too). It types the *command* surface: `deposit` / `withdraw` / `transferOut` / `transferIn` and the `Command` records of the deposit, withdraw and transfer use cases. Fees, balances and `Transaction.amount` keep using `Money`, because zero is legal for all three — which is why this change never reached the persistence layer. `AccountController` is the only place a `TransactionAmount` is constructed. See `Refactorings.md` entry 1.
@@ -76,9 +77,9 @@ Each layer is split per aggregate (`account` vs `customer`) — model, service, 
 | PUT | `/api/admin/accounts/{id}/accrue-interest` | ADMIN | Credit monthly interest to a savings account |
 | PUT | `/api/admin/accounts/{id}/mature` | ADMIN | Mature a time deposit and credit accrued interest |
 | PUT | `/api/customers/{id}/password` | CUSTOMER | Change password |
-| POST | `/api/accounts/checking?ownerId=` | CUSTOMER | Open checking account (with optional overdraft) |
-| POST | `/api/accounts/savings?ownerId=` | CUSTOMER | Open savings account (with annual interest rate) |
-| POST | `/api/accounts/time-deposit?ownerId=` | CUSTOMER | Open time deposit (principal locked until maturity) |
+| POST | `/api/accounts/checking` | CUSTOMER | Open checking account for the authenticated caller (with optional overdraft) |
+| POST | `/api/accounts/savings` | CUSTOMER | Open savings account for the authenticated caller (with annual interest rate) |
+| POST | `/api/accounts/time-deposit` | CUSTOMER | Open time deposit for the authenticated caller (principal locked until maturity) |
 | GET | `/api/customers/{id}/accounts` | CUSTOMER | List accounts |
 | GET | `/api/accounts/{id}/balance` | CUSTOMER | Get balance |
 | POST | `/api/accounts/{id}/deposit` | CUSTOMER | Deposit |
