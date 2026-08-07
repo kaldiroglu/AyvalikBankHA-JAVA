@@ -635,3 +635,181 @@ the fifth one's diff readable as *only* the security change.
 2. The 403/404 distinction leaks which account ids exist. Change it to 404-for-both. Which tests
    break, and what does that tell you about where the decision is encoded?
 3. Entries 1 and 3 are the same lesson mirrored. State it as a single rule that covers both.
+
+---
+
+## Entry 4 — A refusal vocabulary: when the domain has one word for "no"
+
+**Date:** 2026-08-07
+**Branch:** `refactor/domain-refusal-vocabulary`
+**Baseline commit:** `d23c39c`
+**Principle:** inherit from what callers already catch, and a big-bang change becomes an incremental one
+
+### The symptom
+
+`AccountApplicationService` carried **12 catch clauses** in 262 lines. That was the complaint. It was
+not the problem.
+
+The problem was **17 raw `IllegalStateException` throw sites** in the domain, all meaning different
+things:
+
+| Where | Count | What it actually meant |
+|---|---|---|
+| `ActiveState`, `FrozenState`, `ClosedState` | 7 | wrong lifecycle state |
+| `SavingsAccount`, `TimeDepositAccount` | 8 | product rule violated |
+| `TransferDomainService` | 2 | tier limit exceeded |
+
+One word for "no", used seventeen times to say seventeen different things.
+
+### Consequence 1 — translation was positional
+
+The application layer recovered the meaning from *which line it had wrapped*:
+
+- `FrozenState:35` throws `"Account is frozen"` during a withdraw → caught in `withdraw` →
+  `InvalidAccountOperationException`.
+- `ClosedState:21` throws `"Cannot freeze a closed account"` → caught in `freezeAccount` →
+  `AccountNotOperableException`.
+
+Same JDK type. Same category of failure. Two different application exceptions, chosen by call-site
+position rather than by meaning.
+
+That also explains the duplication. `withdraw` needed **two** try blocks — one for the limit check,
+one for the withdrawal — solely because the same exception type had to mean `LimitExceeded` in the
+first and `InvalidAccountOperation` in the second. The repetition was a workaround for the missing
+vocabulary.
+
+### Consequence 2 — the actual defect
+
+`catch (IllegalStateException)` catches a type the JDK, Spring and Hibernate all throw. Any genuine
+bug arising inside those try blocks — a broken mapper, an exhausted connection pool, iterator misuse —
+was converted into an **HTTP 422 business error**.
+
+That is the worst possible failure mode: the client is told its request was unprocessable, and
+monitoring sees a normal 4xx. Nothing alerts. The bug is invisible.
+
+### The change
+
+```java
+public sealed abstract class AccountRuleViolation extends IllegalStateException
+        permits AccountNotActiveException,
+                InsufficientBalanceException,
+                OperationNotPermittedException,
+                TransactionLimitExceededException {
+```
+
+| Domain type — named for the *rule* | Application type — named for the *response* |
+|---|---|
+| `AccountNotActiveException` | `AccountNotOperableException` |
+| `InsufficientBalanceException` | `InsufficientFundsException` |
+| `OperationNotPermittedException` | `InvalidAccountOperationException` |
+| `TransactionLimitExceededException` | `LimitExceededException` |
+
+### Why the base extends `IllegalStateException` — the transferable lesson
+
+This looked like a compromise. It is the most useful decision in the change.
+
+`catch (AccountRuleViolation)` does **not** catch a plain `IllegalStateException`. Precision comes
+from catching the *subtype*; where the base sits in the hierarchy is irrelevant to that. But because
+`AccountRuleViolation` **is-a** `IllegalStateException`:
+
+- all **25** existing domain assertions on `IllegalStateException.class` kept passing, untouched;
+- the 17 throw sites could be retyped in a commit that provably changed nothing.
+
+The work therefore split into three commits with checkpoints **200 → 200 → 202**. Two of them are
+guaranteed-inert by construction, and all behavior change is isolated in the third — whose diff a
+reviewer can read in a minute.
+
+> **When introducing a type hierarchy over an existing exception, inherit from the type callers
+> already catch.** The new hierarchy becomes additive, existing catches and assertions keep working,
+> and the migration stops being a big bang.
+
+Choosing `extends RuntimeException` would have forced 25 test edits and bought nothing.
+
+### The exhaustive switch
+
+```java
+private RuntimeException translate(AccountRuleViolation violation) {
+    return switch (violation) {
+        case AccountNotActiveException e         -> new AccountNotOperableException(e.getMessage());
+        case InsufficientBalanceException e      -> new InsufficientFundsException(e.getMessage());
+        case OperationNotPermittedException e    -> new InvalidAccountOperationException(e.getMessage());
+        case TransactionLimitExceededException e -> new LimitExceededException(e.getMessage());
+    };
+}
+```
+
+**No `default` clause.** The hierarchy is sealed, so the compiler proves the switch total — and a
+fifth refusal type breaks the build here until it is handled. This is the same technique
+`AccountPersistenceMapper` already uses over the sealed `Account` hierarchy, and the same reason
+`Account` is sealed in the first place: extension should be deliberate.
+
+### Before and after
+
+`withdraw`, showing two try blocks collapse into one:
+
+**Before**
+
+```java
+try {
+    transferDomainService.requireWithdrawalWithinLimit(command.amount(), owner.getTier());
+} catch (IllegalStateException e) {
+    throw new LimitExceededException(e.getMessage());
+}
+Transaction tx;
+try {
+    tx = account.withdraw(command.amount());
+} catch (InsufficientBalanceException e) {
+    throw new InsufficientFundsException(e.getMessage());
+} catch (IllegalStateException e) {
+    throw new InvalidAccountOperationException(e.getMessage());
+}
+```
+
+**After**
+
+```java
+Transaction tx;
+try {
+    transferDomainService.requireWithdrawalWithinLimit(command.amount(), owner.getTier());
+    tx = account.withdraw(command.amount());
+} catch (AccountRuleViolation e) {
+    throw translate(e);
+}
+```
+
+**12 catch clauses → 8.**
+
+### Behavior changes
+
+1. **Frozen and closed accounts now report `AccountNotOperableException`** rather than the generic
+   invalid-operation type. Both map to 422, so no client is affected; the type and message simply
+   become accurate. No existing test pinned the old type — verified — so a new one pins the new.
+2. **A stray `IllegalStateException` now propagates**, surfacing as HTTP 500. This is the fix.
+
+`shouldNotSwallowAnUnrelatedIllegalStateException` injects a mocked `TransferDomainService` that
+throws `new IllegalStateException("connection pool exhausted")` and asserts the result is neither
+`LimitExceededException` nor `InvalidAccountOperationException`. A mocked collaborator is needed
+because the fault has to arise **inside** the guarded region; stubbing a repository would have
+tested nothing, since the repository calls sit outside the try.
+
+That test is worth more than the refactoring it guards.
+
+### Scope
+
+| | |
+|---|---|
+| New | `AccountRuleViolation` + 3 subtypes |
+| Modified | 3 state classes, 2 account subtypes, `TransferDomainService`, `AccountApplicationService` |
+| Untouched | persistence, controllers, ports, `GlobalExceptionHandler`, all four application exception classes, all 25 domain assertions |
+| Catch clauses | 12 → 8 |
+| Tests | 200 → 202 |
+
+### Discussion questions
+
+1. The 25 domain tests still assert `IllegalStateException.class` rather than the precise subtype.
+   Argue both sides of tightening them.
+2. `translate` returns a `RuntimeException` for the caller to throw, rather than throwing itself.
+   Why does that matter to the compiler at the call site?
+3. Entry 1 introduced `InsufficientBalanceException extends IllegalStateException`. This entry made
+   it a subtype of a new sealed base. What would have had to change if entry 1 had chosen
+   `RuntimeException` instead?

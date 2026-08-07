@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-200 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+202 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -327,7 +327,7 @@ These tests cover the orchestration layer. All repository and infrastructure por
 
 ---
 
-### `AccountApplicationServiceTest` — 30 tests
+### `AccountApplicationServiceTest` — 32 tests
 
 **Class under test:** `application/service/AccountApplicationService.java`
 
@@ -381,6 +381,8 @@ These tests cover the orchestration layer. All repository and infrastructure por
 | `shouldRejectWithdrawAboveStandardCap` | A 5001 USD withdrawal on an account whose owner is `STANDARD` throws `LimitExceededException`. |
 | `shouldStoreTransferFeePercent` | `setTransferFee` delegates the percentage to `SettingsRepositoryPort.setTransferFeePercent`. |
 | `shouldRejectNegativeTransferFeePercent` | A negative percentage throws `IllegalArgumentException` and the repository is never touched. Covers a guard that no test previously exercised: `SetTransferFeeRequest` carries `@DecimalMin("0.0")`, so the REST layer rejects negatives before the service is reached. |
+| `shouldReportAccountNotOperableWhenWithdrawingFromFrozenAccount` | A withdraw from a frozen account yields `AccountNotOperableException`, not the generic invalid-operation type. Pins the corrected naming after the refusal-vocabulary refactoring. |
+| `shouldNotSwallowAnUnrelatedIllegalStateException` | A mocked `TransferDomainService` throwing a plain `IllegalStateException` propagates as-is rather than being converted into a 422 business error. The collaborator must be mocked because the fault has to arise *inside* the guarded try block. This is the test that would have caught the original swallowing defect. |
 
 ---
 
