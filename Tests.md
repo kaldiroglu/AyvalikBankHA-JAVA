@@ -1,6 +1,6 @@
 # Test Suite — Ayvalık Bank CC-1
 
-176 tests across 15 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
+184 tests across 16 test classes. Every test runs with JUnit 5 and AssertJ assertions. No test touches a real database or starts a Spring container unless noted.
 
 Run all tests:
 ```bash
@@ -59,6 +59,25 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 
 ---
 
+### `TransactionAmountTest` — 8 tests
+
+**Class under test:** `domain/model/account/TransactionAmount.java` (value object / record)
+
+`TransactionAmount` is the magnitude of a requested money movement. It wraps `Money` and is **strictly positive by construction** — zero and negative values cannot be built, so no downstream method needs to check for them. `Money` itself stays signed, because a negative balance is a real overdraft position. See `Refactorings.md` entry 1.
+
+| Test | What it verifies |
+|------|------------------|
+| `shouldAcceptPositiveAmount` | `TransactionAmount.of(100.0, USD)` stores `100.00` and reports currency USD. |
+| `shouldRejectNegativeAmount` | `TransactionAmount.of(-50.0, USD)` throws `IllegalArgumentException` with "must be positive". |
+| `shouldRejectZeroAmount` | `TransactionAmount.of(0.0, USD)` throws `IllegalArgumentException` with "must be positive" — a zero-value transfer would write two ledger rows recording no movement of money. |
+| `shouldRejectNullMoney` | `TransactionAmount.of((Money) null)` throws `IllegalArgumentException` with "must not be null". |
+| `shouldRejectAmountRoundingToZero` | `0.001` is scaled to `0.00` by `Money` *before* the positivity check runs, and is then rejected. Pins the ordering of the two compact constructors. |
+| `shouldInheritTwoDecimalScalingFromMoney` | `10.005` becomes `10.01` — HALF_UP scaling is inherited from the wrapped `Money`, not re-implemented. |
+| `shouldBeEqualByValue` | Two amounts with the same value and currency are equal; the same value in a different currency is not. |
+| `shouldNotConstrainMoneyItself` | `Money.of(-500.0, USD)` still succeeds and `isNegative()` is true — the positivity constraint belongs to `TransactionAmount` alone, so overdraft keeps working. |
+
+---
+
 ### `AccountTest` — 21 tests
 
 **Class under test:** `domain/model/account/Account.java` (entity)
@@ -72,7 +91,7 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 | `shouldOpenAccountWithZeroBalance` | `Account.open(...)` starts with a zero balance in the correct currency. |
 | `shouldDepositAndIncreaseBalance` | `deposit(500 USD)` raises the balance to 500 and returns a `DEPOSIT` transaction with the correct amount. |
 | `shouldWithdrawAndDecreaseBalance` | After depositing 500 then withdrawing 200, balance is 300 and a `WITHDRAWAL` transaction is returned. |
-| `shouldRejectWithdrawalExceedingBalance` | Withdrawing more than the current balance throws `IllegalArgumentException` with "Insufficient". |
+| `shouldRejectWithdrawalExceedingBalance` | Withdrawing more than the current balance throws `InsufficientBalanceException` with "Insufficient". |
 | `shouldRejectDepositWithWrongCurrency` | Depositing EUR into a USD account throws `IllegalArgumentException` mentioning "currency". |
 | `shouldTransferOutWithFeeDeducted` | `transferOut(200 USD, fee=2 USD, ...)` deducts 202 from a 1000 USD balance, leaving 798. |
 | `shouldTransferInAndIncreaseBalance` | `transferIn(300 USD, ...)` credits the account, raising balance from 0 to 300. |
@@ -140,8 +159,8 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 |------|-----------------|
 | `shouldOpenWithZeroBalanceAndNoOverdraftByDefault` | `CheckingAccount.open(owner, USD)` starts with zero balance, `CHECKING` type, and zero overdraft limit. |
 | `shouldWithdrawIntoOverdraftWhenLimitAllows` | With a $100 overdraft limit and $50 balance, withdrawing $120 succeeds and leaves the balance at -$70. |
-| `shouldRejectWithdrawalBeyondOverdraftLimit` | Withdrawing $60 with no balance and only a $50 overdraft limit throws `IllegalArgumentException` with "overdraft". |
-| `shouldRejectWithdrawalWhenNoOverdraftAndInsufficientFunds` | Withdrawing more than the balance from an account with no overdraft throws `IllegalArgumentException` with "Insufficient". |
+| `shouldRejectWithdrawalBeyondOverdraftLimit` | Withdrawing $60 with no balance and only a $50 overdraft limit throws `InsufficientBalanceException` with "overdraft". |
+| `shouldRejectWithdrawalWhenNoOverdraftAndInsufficientFunds` | Withdrawing more than the balance from an account with no overdraft throws `InsufficientBalanceException` with "Insufficient". |
 
 ---
 
@@ -155,7 +174,7 @@ These tests cover the core business logic. They are pure Java — no Spring cont
 |------|-----------------|
 | `shouldOpenWithGivenInterestRateAndZeroBalance` | `SavingsAccount.open(owner, USD, 0.03)` starts with `SAVINGS` type, the given rate, and zero balance. |
 | `shouldRejectNegativeInterestRate` | Constructing with a negative rate throws `IllegalArgumentException`. |
-| `shouldRejectWithdrawalThatWouldOverdraw` | Withdrawing more than the balance throws `IllegalArgumentException` with "Insufficient". |
+| `shouldRejectWithdrawalThatWouldOverdraw` | Withdrawing more than the balance throws `InsufficientBalanceException` with "Insufficient". |
 | `shouldAccrueInterestForAMonth` | On a $1,000 balance at 12% annual, `accrueInterest(2026-04)` returns an `INTEREST` transaction of $10, raises balance to $1,010, and sets `lastAccrualDate` to 2026-05-01. |
 | `shouldAccrueInterestEvenWhenFrozen` | `accrueInterest` succeeds on a FROZEN account (admin-triggered bookkeeping is not blocked by frozen status). |
 | `shouldRejectAccrualOnClosedAccount` | `accrueInterest` on a CLOSED account throws `IllegalStateException` with "closed". |
@@ -306,7 +325,7 @@ These tests cover the orchestration layer. All repository and infrastructure por
 | `shouldThrowAccountNotFoundOnDepositToMissingAccount` | `deposit` throws `AccountNotFoundException` when `findById` returns empty. |
 | `shouldTransferBetweenAccountsOfSameCustomerFreeOfCharge` | Transfer between two accounts owned by the same customer applies 0% fee regardless of the configured rate. Source ends at 300, target at 200. |
 | `shouldDeductFeeForTransferBetweenDifferentCustomers` | Transfer between accounts of different customers with 1% fee deducts 202 from source (200 + 2 fee) and credits 200 to target. |
-| `shouldThrowOnWithdrawExceedingBalance` | `withdraw` propagates the `IllegalArgumentException("Insufficient funds")` thrown by the domain entity when the amount exceeds the balance. |
+| `shouldThrowOnWithdrawExceedingBalance` | `withdraw` translates the domain's `InsufficientBalanceException` into the application-layer `InsufficientFundsException`, which `GlobalExceptionHandler` maps to HTTP 422. |
 
 #### Account status management
 

@@ -1,0 +1,607 @@
+---
+title: Domain UML Class Diagrams - Package `dev.kaldiroglu.hexagonal.ayvalikbank.domain`
+---
+
+%% 1. Domain Model — Entities, Value Objects, State, & Enums
+%% (Account-aggregate classes live in domain.model.account; Customer-aggregate in domain.model.customer.
+%%  Account holds a CustomerId — the only cross-aggregate reference.)
+
+classDiagram
+    direction TB
+
+    class Customer {
+        <<entity>>
+        -CustomerId id
+        -String name
+        -String email
+        -String role
+        -CustomerTier tier
+        -Password currentPassword
+        -List~Password~ passwordHistory
+        +create(name, email, password) Customer$
+        +changePassword(newPassword) void
+        +changeTier(newTier) void
+        +getAllPasswordsForReuseCheck() List~Password~
+        +getId() CustomerId
+        +getName() String
+        +getEmail() String
+        +getRole() String
+        +getTier() CustomerTier
+        +getCurrentPassword() Password
+        +getPasswordHistory() List~Password~
+    }
+
+    class CustomerTier {
+        <<enum>>
+        STANDARD
+        PREMIUM
+        PRIVATE
+        +feeMultiplier() BigDecimal
+        +maxPerTransfer() Optional~BigDecimal~
+        +maxPerWithdrawal() Optional~BigDecimal~
+    }
+
+    class Account {
+        <<sealed abstract>>
+        #AccountId id
+        #CustomerId ownerId
+        #Currency currency
+        #Money balance
+        #AccountState state
+        +type()* AccountType
+        +deposit(amount)* Transaction
+        +withdraw(amount)* Transaction
+        +transferOut(amount, fee, targetId)* Transaction
+        +transferIn(amount, sourceId) Transaction
+        +freeze() void
+        +unfreeze() void
+        +close() void
+        +getStatus() AccountStatus
+        +getState() AccountState
+    }
+
+    class CheckingAccount {
+        <<entity, final>>
+        -Money overdraftLimit
+        +open(ownerId, currency) CheckingAccount$
+        +open(ownerId, currency, overdraftLimit) CheckingAccount$
+        +deposit(amount) Transaction
+        +withdraw(amount) Transaction
+        +transferOut(amount, fee, targetId) Transaction
+        +getOverdraftLimit() Money
+    }
+
+    class SavingsAccount {
+        <<entity, final>>
+        -BigDecimal annualInterestRate
+        -LocalDate lastAccrualDate
+        +open(ownerId, currency, annualInterestRate) SavingsAccount$
+        +deposit(amount) Transaction
+        +withdraw(amount) Transaction
+        +transferOut(amount, fee, targetId) Transaction
+        +accrueInterest(month) Transaction
+        +getAnnualInterestRate() BigDecimal
+        +getLastAccrualDate() LocalDate
+    }
+
+    class TimeDepositAccount {
+        <<entity, final>>
+        -Money principal
+        -LocalDate openedOn
+        -LocalDate maturityDate
+        -BigDecimal annualInterestRate
+        -boolean matured
+        +open(ownerId, currency, principal, openedOn, maturityDate, rate) TimeDepositAccount$
+        +deposit(amount) Transaction
+        +withdraw(amount) Transaction
+        +transferOut(amount, fee, targetId) Transaction
+        +mature(today) Transaction
+        +getPrincipal() Money
+        +getOpenedOn() LocalDate
+        +getMaturityDate() LocalDate
+        +getAnnualInterestRate() BigDecimal
+        +isMatured() boolean
+    }
+
+    class AccountState {
+        <<sealed interface>>
+        +status() AccountStatus
+        +freeze() AccountState
+        +unfreeze() AccountState
+        +close() AccountState
+        +requireOperable() void
+        +isTerminal() boolean
+        +of(status) AccountState$
+    }
+
+    class ActiveState {
+        <<state, singleton>>
+        +INSTANCE ActiveState$
+    }
+
+    class FrozenState {
+        <<state, singleton>>
+        +INSTANCE FrozenState$
+    }
+
+    class ClosedState {
+        <<state, singleton>>
+        +INSTANCE ClosedState$
+    }
+
+    class Transaction {
+        <<entity>>
+        -TransactionId id
+        -AccountId accountId
+        -TransactionType type
+        -Money amount
+        -LocalDateTime timestamp
+        -String description
+        +create(accountId, type, amount, desc) Transaction$
+        +getId() TransactionId
+        +getAccountId() AccountId
+        +getType() TransactionType
+        +getAmount() Money
+        +getTimestamp() LocalDateTime
+        +getDescription() String
+    }
+
+    class Money {
+        <<record>>
+        +BigDecimal amount
+        +Currency currency
+        +of(amount, currency) Money$
+        +zero(currency) Money$
+        +add(other) Money
+        +subtract(other) Money
+        +multiply(factor) Money
+        +negate() Money
+        +isGreaterThanOrEqualTo(other) boolean
+        +isNegative() boolean
+        +isZero() boolean
+    }
+
+    class TransactionAmount {
+        <<record>>
+        +Money value
+        +of(Money) TransactionAmount$
+        +of(amount, currency) TransactionAmount$
+        +asMoney() Money
+        +currency() Currency
+    }
+
+    class Password {
+        <<record>>
+        +String hashedValue
+        +ofHashed(hashedValue) Password$
+    }
+
+    class CustomerId {
+        <<record>>
+        +UUID value
+        +generate() CustomerId$
+        +of(UUID) CustomerId$
+        +of(String) CustomerId$
+    }
+
+    class AccountId {
+        <<record>>
+        +UUID value
+        +generate() AccountId$
+        +of(UUID) AccountId$
+        +of(String) AccountId$
+    }
+
+    class TransactionId {
+        <<record>>
+        +UUID value
+        +generate() TransactionId$
+        +of(UUID) TransactionId$
+    }
+
+    class Currency {
+        <<enum>>
+        USD
+        EUR
+        TL
+    }
+
+    class TransactionType {
+        <<enum>>
+        DEPOSIT
+        WITHDRAWAL
+        TRANSFER_OUT
+        TRANSFER_IN
+        INTEREST
+    }
+
+    class AccountType {
+        <<enum>>
+        CHECKING
+        SAVINGS
+        TIME_DEPOSIT
+    }
+
+    class AccountStatus {
+        <<enum>>
+        ACTIVE
+        FROZEN
+        CLOSED
+    }
+
+    Customer "1" *-- "1" CustomerId       : id
+    Customer "1" *-- "1" Password         : currentPassword
+    Customer "1" *-- "0..3" Password      : passwordHistory
+
+    Account  "1" *-- "1" AccountId        : id
+    Account  "1" *-- "1" Money            : balance
+    Account  "1" --> "1" CustomerId       : ownerId
+    Account  "1" --> "1" Currency
+    Account  "1" *-- "1" AccountState     : state
+
+    Account <|-- CheckingAccount
+    Account <|-- SavingsAccount
+    Account <|-- TimeDepositAccount
+
+    AccountState <|.. ActiveState
+    AccountState <|.. FrozenState
+    AccountState <|.. ClosedState
+
+    AccountState ..> AccountStatus : status()
+
+    Transaction "1" *-- "1" TransactionId : id
+    Transaction "1" *-- "1" Money         : amount
+    Transaction "1" --> "1" AccountId     : accountId
+    Transaction "1" --> "1" TransactionType
+
+    Money "1" --> "1" Currency
+    TransactionAmount "1" *-- "1" Money   : value (strictly positive)
+
+
+%%---
+
+%% 2. Domain Services
+
+    direction LR
+
+    class PasswordValidationService {
+        <<service>>
+        +validate(rawPassword) void
+    }
+
+    class TransferDomainService {
+        <<service>>
+        +calculateFee(amount, sameCustomer, feePercent, sourceTier) Money
+        +requireTransferWithinLimit(amount, tier) void
+        +requireWithdrawalWithinLimit(amount, tier) void
+    }
+
+    TransferDomainService ..> Money : returns
+    TransferDomainService ..> CustomerTier : "uses"
+    PasswordValidationService ..> IllegalArgumentException : throws
+
+
+%%---
+
+%% 3. Ports In — Use Cases (Driving / Inbound)
+
+%% Each interface contains a nested `Command` record that carries the input data.
+
+
+    direction TB
+
+    class CreateCustomerUseCase {
+        <<interface>>
+        +createCustomer(Command) Customer
+    }
+    class `CreateCustomerUseCase.Command` {
+        <<record>>
+        +String name
+        +String email
+        +String rawPassword
+    }
+    CreateCustomerUseCase ..> `CreateCustomerUseCase.Command`
+
+    class DeleteCustomerUseCase {
+        <<interface>>
+        +deleteCustomer(CustomerId) void
+    }
+
+    class ListCustomersUseCase {
+        <<interface>>
+        +listCustomers() List~Customer~
+    }
+
+    class ChangePasswordUseCase {
+        <<interface>>
+        +changePassword(Command) void
+    }
+    class `ChangePasswordUseCase.Command` {
+        <<record>>
+        +CustomerId customerId
+        +String rawNewPassword
+    }
+    ChangePasswordUseCase ..> `ChangePasswordUseCase.Command`
+
+    class ChangeCustomerTierUseCase {
+        <<interface>>
+        +changeCustomerTier(Command) void
+    }
+    class `ChangeCustomerTierUseCase.Command` {
+        <<record>>
+        +CustomerId customerId
+        +CustomerTier tier
+    }
+    ChangeCustomerTierUseCase ..> `ChangeCustomerTierUseCase.Command`
+
+    class OpenCheckingAccountUseCase {
+        <<interface>>
+        +openChecking(Command) CheckingAccount
+    }
+    class `OpenCheckingAccountUseCase.Command` {
+        <<record>>
+        +CustomerId ownerId
+        +Currency currency
+        +Money overdraftLimit
+    }
+    OpenCheckingAccountUseCase ..> `OpenCheckingAccountUseCase.Command`
+
+    class OpenSavingsAccountUseCase {
+        <<interface>>
+        +openSavings(Command) SavingsAccount
+    }
+    class `OpenSavingsAccountUseCase.Command` {
+        <<record>>
+        +CustomerId ownerId
+        +Currency currency
+        +BigDecimal annualInterestRate
+    }
+    OpenSavingsAccountUseCase ..> `OpenSavingsAccountUseCase.Command`
+
+    class OpenTimeDepositAccountUseCase {
+        <<interface>>
+        +openTimeDeposit(Command) TimeDepositAccount
+    }
+    class `OpenTimeDepositAccountUseCase.Command` {
+        <<record>>
+        +CustomerId ownerId
+        +Currency currency
+        +Money principal
+        +LocalDate maturityDate
+        +BigDecimal annualInterestRate
+    }
+    OpenTimeDepositAccountUseCase ..> `OpenTimeDepositAccountUseCase.Command`
+
+    class DepositMoneyUseCase {
+        <<interface>>
+        +deposit(Command) Transaction
+    }
+    class `DepositMoneyUseCase.Command` {
+        <<record>>
+        +AccountId accountId
+        +Money amount
+    }
+    DepositMoneyUseCase ..> `DepositMoneyUseCase.Command`
+
+    class WithdrawMoneyUseCase {
+        <<interface>>
+        +withdraw(Command) Transaction
+    }
+    class `WithdrawMoneyUseCase.Command` {
+        <<record>>
+        +AccountId accountId
+        +Money amount
+    }
+    WithdrawMoneyUseCase ..> `WithdrawMoneyUseCase.Command`
+
+    class GetBalanceUseCase {
+        <<interface>>
+        +getBalance(AccountId) Money
+    }
+
+    class GetTransactionsUseCase {
+        <<interface>>
+        +getTransactions(AccountId) List~Transaction~
+    }
+
+    class ListAccountsUseCase {
+        <<interface>>
+        +listAccounts(CustomerId) List~Account~
+    }
+
+    class TransferMoneyUseCase {
+        <<interface>>
+        +transfer(Command) void
+    }
+    class `TransferMoneyUseCase.Command` {
+        <<record>>
+        +AccountId sourceAccountId
+        +AccountId targetAccountId
+        +Money amount
+    }
+    TransferMoneyUseCase ..> `TransferMoneyUseCase.Command`
+
+    class SetTransferFeeUseCase {
+        <<interface>>
+        +setTransferFee(Command) void
+    }
+    class `SetTransferFeeUseCase.Command` {
+        <<record>>
+        +BigDecimal feePercent
+    }
+    SetTransferFeeUseCase ..> `SetTransferFeeUseCase.Command`
+
+    class FreezeAccountUseCase {
+        <<interface>>
+        +freezeAccount(AccountId) void
+    }
+
+    class UnfreezeAccountUseCase {
+        <<interface>>
+        +unfreezeAccount(AccountId) void
+    }
+
+    class CloseAccountUseCase {
+        <<interface>>
+        +closeAccount(AccountId) void
+    }
+
+    class AccrueInterestUseCase {
+        <<interface>>
+        +accrueInterest(Command) Transaction
+    }
+    class `AccrueInterestUseCase.Command` {
+        <<record>>
+        +AccountId accountId
+        +YearMonth month
+    }
+    AccrueInterestUseCase ..> `AccrueInterestUseCase.Command`
+
+    class MatureTimeDepositUseCase {
+        <<interface>>
+        +mature(Command) Transaction
+    }
+    class `MatureTimeDepositUseCase.Command` {
+        <<record>>
+        +AccountId accountId
+    }
+    MatureTimeDepositUseCase ..> `MatureTimeDepositUseCase.Command`
+
+%%---
+
+%% 4. Ports Out — Repository & Infrastructure (Driven / Outbound)
+
+    direction TB
+
+    class CustomerRepositoryPort {
+        <<interface>>
+        +save(Customer) Customer
+        +findById(CustomerId) Optional~Customer~
+        +findByEmail(String) Optional~Customer~
+        +findAll() List~Customer~
+        +deleteById(CustomerId) void
+        +existsById(CustomerId) boolean
+    }
+
+    class AccountRepositoryPort {
+        <<interface>>
+        +save(Account) Account
+        +findById(AccountId) Optional~Account~
+        +findByOwnerId(CustomerId) List~Account~
+        +existsById(AccountId) boolean
+    }
+
+    class TransactionRepositoryPort {
+        <<interface>>
+        +save(Transaction) Transaction
+        +findByAccountId(AccountId) List~Transaction~
+    }
+
+    class PasswordHasherPort {
+        <<interface>>
+        +hash(rawPassword) String
+        +matches(rawPassword, hashedPassword) boolean
+    }
+
+    class SettingsRepositoryPort {
+        <<interface>>
+        +getTransferFeePercent() BigDecimal
+        +setTransferFeePercent(BigDecimal) void
+    }
+
+%%---
+
+%% 5. Full Domain Overview — Ports, Services & Model Together
+
+    direction LR
+
+    namespace model_account {
+        class Account
+        class CheckingAccount
+        class SavingsAccount
+        class TimeDepositAccount
+        class AccountState
+        class ActiveState
+        class FrozenState
+        class ClosedState
+        class Transaction
+        class Money
+        class AccountId
+        class TransactionId
+        class Currency
+        class TransactionType
+        class AccountType
+        class AccountStatus
+    }
+
+    namespace model_customer {
+        class Customer
+        class CustomerTier
+        class Password
+        class CustomerId
+    }
+
+    namespace services_account {
+        class TransferDomainService
+    }
+
+    namespace services_customer {
+        class PasswordValidationService
+    }
+
+    namespace portsIn_account {
+        class OpenCheckingAccountUseCase
+        class OpenSavingsAccountUseCase
+        class OpenTimeDepositAccountUseCase
+        class DepositMoneyUseCase
+        class WithdrawMoneyUseCase
+        class GetBalanceUseCase
+        class GetTransactionsUseCase
+        class ListAccountsUseCase
+        class TransferMoneyUseCase
+        class SetTransferFeeUseCase
+        class FreezeAccountUseCase
+        class UnfreezeAccountUseCase
+        class CloseAccountUseCase
+        class AccrueInterestUseCase
+        class MatureTimeDepositUseCase
+    }
+
+    namespace portsIn_customer {
+        class CreateCustomerUseCase
+        class DeleteCustomerUseCase
+        class ListCustomersUseCase
+        class ChangePasswordUseCase
+        class ChangeCustomerTierUseCase
+    }
+
+    namespace portsOut_account {
+        class AccountRepositoryPort
+        class TransactionRepositoryPort
+        class SettingsRepositoryPort
+    }
+
+    namespace portsOut_customer {
+        class CustomerRepositoryPort
+        class PasswordHasherPort
+    }
+
+    CreateCustomerUseCase            ..> Customer            : returns
+    ListCustomersUseCase             ..> Customer            : returns
+    OpenCheckingAccountUseCase       ..> CheckingAccount     : returns
+    OpenSavingsAccountUseCase        ..> SavingsAccount      : returns
+    OpenTimeDepositAccountUseCase    ..> TimeDepositAccount  : returns
+    ListAccountsUseCase              ..> Account             : returns
+    DepositMoneyUseCase              ..> Transaction         : returns
+    WithdrawMoneyUseCase             ..> Transaction         : returns
+    GetBalanceUseCase                ..> Money               : returns
+    GetTransactionsUseCase           ..> Transaction         : returns
+    AccrueInterestUseCase            ..> Transaction         : returns
+    MatureTimeDepositUseCase         ..> Transaction         : returns
+
+    CustomerRepositoryPort    ..> Customer    : manages
+    AccountRepositoryPort     ..> Account     : manages
+    TransactionRepositoryPort ..> Transaction : manages
+
+    TransferDomainService     ..> Money      : uses/returns
+    PasswordValidationService ..> Password   : validates for
