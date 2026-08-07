@@ -82,8 +82,8 @@ public class AccountApplicationService implements
         Transaction tx;
         try {
             tx = account.deposit(command.amount());
-        } catch (IllegalStateException e) {
-            throw new InvalidAccountOperationException(e.getMessage());
+        } catch (AccountRuleViolation e) {
+            throw translate(e);
         }
         accountRepository.save(account);
         return transactionRepository.save(tx);
@@ -94,18 +94,12 @@ public class AccountApplicationService implements
         Account account = findAccountOrThrow(command.accountId());
         requireOwner(account, command.callerId());
         Customer owner = findCustomerOrThrow(account.getOwnerId());
-        try {
-            transferDomainService.requireWithdrawalWithinLimit(command.amount(), owner.getTier());
-        } catch (IllegalStateException e) {
-            throw new LimitExceededException(e.getMessage());
-        }
         Transaction tx;
         try {
+            transferDomainService.requireWithdrawalWithinLimit(command.amount(), owner.getTier());
             tx = account.withdraw(command.amount());
-        } catch (InsufficientBalanceException e) {
-            throw new InsufficientFundsException(e.getMessage());
-        } catch (IllegalStateException e) {
-            throw new InvalidAccountOperationException(e.getMessage());
+        } catch (AccountRuleViolation e) {
+            throw translate(e);
         }
         accountRepository.save(account);
         return transactionRepository.save(tx);
@@ -137,24 +131,16 @@ public class AccountApplicationService implements
         // breaking the product.
         Customer sourceOwner = findCustomerOrThrow(source.getOwnerId());
 
-        try {
-            transferDomainService.requireTransferWithinLimit(command.amount(), sourceOwner.getTier());
-        } catch (IllegalStateException e) {
-            throw new LimitExceededException(e.getMessage());
-        }
-
-        boolean sameCustomer = source.getOwnerId().equals(target.getOwnerId());
-        BigDecimal feePercent = settingsRepository.getTransferFeePercent();
-        Money fee = transferDomainService.calculateFee(command.amount(), sameCustomer, feePercent, sourceOwner.getTier());
-
         Transaction outTx, inTx;
         try {
+            transferDomainService.requireTransferWithinLimit(command.amount(), sourceOwner.getTier());
+            boolean sameCustomer = source.getOwnerId().equals(target.getOwnerId());
+            BigDecimal feePercent = settingsRepository.getTransferFeePercent();
+            Money fee = transferDomainService.calculateFee(command.amount(), sameCustomer, feePercent, sourceOwner.getTier());
             outTx = source.transferOut(command.amount(), fee, target.getId().toString());
             inTx = target.transferIn(command.amount(), source.getId().toString());
-        } catch (InsufficientBalanceException e) {
-            throw new InsufficientFundsException(e.getMessage());
-        } catch (IllegalStateException e) {
-            throw new InvalidAccountOperationException(e.getMessage());
+        } catch (AccountRuleViolation e) {
+            throw translate(e);
         }
 
         accountRepository.save(source);
@@ -175,7 +161,7 @@ public class AccountApplicationService implements
     public void freezeAccount(AccountId accountId) {
         Account account = findAccountOrThrow(accountId);
         try { account.freeze(); }
-        catch (IllegalStateException e) { throw new AccountNotOperableException(e.getMessage()); }
+        catch (AccountRuleViolation e) { throw translate(e); }
         accountRepository.save(account);
     }
 
@@ -183,7 +169,7 @@ public class AccountApplicationService implements
     public void unfreezeAccount(AccountId accountId) {
         Account account = findAccountOrThrow(accountId);
         try { account.unfreeze(); }
-        catch (IllegalStateException e) { throw new AccountNotOperableException(e.getMessage()); }
+        catch (AccountRuleViolation e) { throw translate(e); }
         accountRepository.save(account);
     }
 
@@ -191,7 +177,7 @@ public class AccountApplicationService implements
     public void closeAccount(AccountId accountId) {
         Account account = findAccountOrThrow(accountId);
         try { account.close(); }
-        catch (IllegalStateException e) { throw new AccountNotOperableException(e.getMessage()); }
+        catch (AccountRuleViolation e) { throw translate(e); }
         accountRepository.save(account);
     }
 
@@ -202,7 +188,7 @@ public class AccountApplicationService implements
             throw new InvalidAccountOperationException("Account is not a savings account");
         Transaction tx;
         try { tx = savings.accrueInterest(command.month()); }
-        catch (IllegalStateException e) { throw new InvalidAccountOperationException(e.getMessage()); }
+        catch (AccountRuleViolation e) { throw translate(e); }
         accountRepository.save(savings);
         return transactionRepository.save(tx);
     }
@@ -214,7 +200,7 @@ public class AccountApplicationService implements
             throw new InvalidAccountOperationException("Account is not a time deposit");
         Transaction tx;
         try { tx = td.mature(LocalDate.now()); }
-        catch (IllegalStateException e) { throw new InvalidAccountOperationException(e.getMessage()); }
+        catch (AccountRuleViolation e) { throw translate(e); }
         accountRepository.save(td);
         return transactionRepository.save(tx);
     }
@@ -224,6 +210,26 @@ public class AccountApplicationService implements
         if (command.feePercent().compareTo(BigDecimal.ZERO) < 0)
             throw new IllegalArgumentException("Transfer fee percent cannot be negative");
         settingsRepository.setTransferFeePercent(command.feePercent());
+    }
+
+    /**
+     * Maps a domain refusal to the application exception that carries its HTTP meaning.
+     *
+     * <p>No {@code default} clause: {@link AccountRuleViolation} is sealed, so the compiler proves
+     * this switch total. Adding a fifth refusal type breaks the build here until it is handled —
+     * the same technique {@code AccountPersistenceMapper} uses over the sealed {@code Account}
+     * hierarchy.
+     *
+     * <p>Catching {@code AccountRuleViolation} rather than {@code IllegalStateException} is what
+     * stops a JDK or framework exception being reported to the client as a 422 business error.
+     */
+    private RuntimeException translate(AccountRuleViolation violation) {
+        return switch (violation) {
+            case AccountNotActiveException e         -> new AccountNotOperableException(e.getMessage());
+            case InsufficientBalanceException e      -> new InsufficientFundsException(e.getMessage());
+            case OperationNotPermittedException e    -> new InvalidAccountOperationException(e.getMessage());
+            case TransactionLimitExceededException e -> new LimitExceededException(e.getMessage());
+        };
     }
 
     /**

@@ -481,4 +481,45 @@ class AccountApplicationServiceTest {
 
         verifyNoInteractions(accountRepository);
     }
+
+    // ── refusal translation ───────────────────────────────────────────────
+
+    @Test
+    @DisplayName("a frozen account reports AccountNotOperable, not the generic invalid-operation type")
+    void shouldReportAccountNotOperableWhenWithdrawingFromFrozenAccount() {
+        CustomerId ownerId = CustomerId.generate();
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
+        account.deposit(TransactionAmount.of(500.0, Currency.USD));
+        account.freeze();
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+        when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
+
+        assertThatThrownBy(() -> service.withdraw(new CustomerAccountPort.WithdrawCommand(
+                ownerId, account.getId(), TransactionAmount.of(10.0, Currency.USD))))
+                .isInstanceOf(AccountNotOperableException.class)
+                .hasMessageContaining("frozen");
+    }
+
+    @Test
+    @DisplayName("an unrelated IllegalStateException is a defect, not a 422 business error")
+    void shouldNotSwallowAnUnrelatedIllegalStateException() {
+        TransferDomainService faultyPolicy = mock(TransferDomainService.class);
+        doThrow(new IllegalStateException("connection pool exhausted"))
+                .when(faultyPolicy).requireWithdrawalWithinLimit(any(), any());
+        AccountApplicationService serviceWithFaultyPolicy = new AccountApplicationService(
+                accountRepository, customerRepository, transactionRepository,
+                settingsRepository, faultyPolicy);
+
+        CustomerId ownerId = CustomerId.generate();
+        Account account = CheckingAccount.open(ownerId, Currency.USD);
+        when(accountRepository.findById(account.getId())).thenReturn(Optional.of(account));
+        when(customerRepository.findById(ownerId)).thenReturn(Optional.of(stubCustomer(ownerId, CustomerTier.STANDARD)));
+
+        assertThatThrownBy(() -> serviceWithFaultyPolicy.withdraw(new CustomerAccountPort.WithdrawCommand(
+                ownerId, account.getId(), TransactionAmount.of(10.0, Currency.USD))))
+                .isInstanceOf(IllegalStateException.class)
+                .isNotInstanceOf(LimitExceededException.class)
+                .isNotInstanceOf(InvalidAccountOperationException.class)
+                .hasMessageContaining("connection pool");
+    }
 }
