@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Unit tests + shared HTTP contract
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Unit and integration tests
+        run: mvn -B clean verify
+
+      # ── shared HTTP contract ──────────────────────────────────────────────
+      # AyvalikBankContractTests is one black-box suite run against all six
+      # implementations. It is what proves the six behave identically; without it
+      # a divergence between repositories goes unnoticed.
+      - name: Check out the shared contract suite
+        uses: actions/checkout@v4
+        with:
+          repository: kaldiroglu/AyvalikBankContractTests
+          path: contract-tests
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install the contract suite
+        run: pip install -e "./contract-tests[dev]"
+
+      # H2 keeps CI free of a database service. Note useTestClasspath: H2 is a
+      # test-scoped dependency, so without it the driver is not on the runtime
+      # classpath and startup fails with "Cannot load driver class: org.h2.Driver".
+      # data.sql is PostgreSQL-specific, so schema creation is left to Hibernate
+      # and the admin account is seeded in code by AdminDataInitializer.
+      - name: Start the application
+        run: |
+          nohup mvn -B spring-boot:run \
+            -Dspring-boot.run.useTestClasspath=true \
+            -Dspring-boot.run.arguments="\
+              --spring.datasource.url=jdbc:h2:mem:bank;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;NON_KEYWORDS=KEY,VALUE \
+              --spring.datasource.driver-class-name=org.h2.Driver \
+              --spring.datasource.username=sa \
+              --spring.datasource.password= \
+              --spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect \
+              --spring.jpa.hibernate.ddl-auto=create-drop \
+              --spring.sql.init.mode=never \
+              --server.port=8080" > /tmp/app.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -sf -o /dev/null -u "$ADMIN" http://localhost:8080/api/admin/customers; then
+              echo "application up after ~${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "application did not start within 90s"; tail -40 /tmp/app.log; exit 1
+        env:
+          ADMIN: 'admin@ayvalikbank.dev:Admin@123!'
+
+      - name: Run the shared contract suite
+        run: pytest -q contract-tests/tests
+        env:
+          BANK_BASE_URL: http://localhost:8080
+
+      - name: Application log on failure
+        if: failure()
+        run: tail -80 /tmp/app.log || true
