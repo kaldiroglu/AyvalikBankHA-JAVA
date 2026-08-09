@@ -16,6 +16,7 @@ the change belongs in all six.
 - Wire format is **camelCase**; validation failures are **400** (not FastAPI's default 422).
 - Enums travel as **strings** (`"USD"`), never numbers.
 - Refactoring write-ups live in `Refactorings.md`; the Java hexagonal repo is the reference.
+- The suite is 29 tests; all six implementations currently pass 29/29.
 
 ## Commands
 
@@ -50,6 +51,21 @@ mvn spring-boot:run -Dspring-boot.run.useTestClasspath=true \
   org.h2.Driver`. `data.sql` is PostgreSQL-specific — use `--spring.sql.init.mode=never` and let
   Hibernate create the schema; the admin is seeded in code.
 - **Docker Desktop** stops on its own; if compose fails with a socket error, `open -a Docker` and wait.
+- **Keep the datasource unique to this repo.** Both Java repos once pointed at
+  `jdbc:postgresql://localhost:5432/ayvalikbank` — same server *and* same database name — each with
+  `ddl-auto=update`. They shared one schema: whichever ran last reshaped it, and each saw the
+  other's rows. `ddl-auto=update` only ever adds, so nothing ever failed to reveal it.
+
+## Ports and databases
+
+This repo: app **8080**, PostgreSQL **5437**, database `ayvalikbank_ha_java`.
+
+All six repos take distinct application and PostgreSQL ports so every one can run at the same
+time; `README.md` carries the full table. **5432 is deliberately unused** — it is the default for
+a native PostgreSQL (Postgres.app, Homebrew), and an application pointed at it connects to that
+server instead of its own container, with no error to say so. Every compose service sets an
+explicit `container_name`: without one Compose derives a name from the directory, and a container
+can outlive the checkout that defined it while still holding its port.
 
 ## Architecture
 
