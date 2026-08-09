@@ -28,7 +28,7 @@ Demonstrate how to apply hexagonal architecture to a real domain — a simplifie
 mvn clean verify
 
 # Start PostgreSQL (required only to run the application)
-docker compose up -d
+docker compose up -d                 # PostgreSQL on host port 5437, database ayvalikbank_ha_java
 
 # Run the application
 mvn spring-boot:run

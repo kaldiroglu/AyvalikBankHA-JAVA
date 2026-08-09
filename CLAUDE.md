@@ -25,7 +25,7 @@ the change belongs in all six.
 #   BANK_BASE_URL=http://localhost:8080 pytest tests/
 
 # Start local PostgreSQL
-docker compose up -d
+docker compose up -d                 # PostgreSQL on host port 5437, database ayvalikbank_ha_java
 
 # Build & test
 mvn clean verify
