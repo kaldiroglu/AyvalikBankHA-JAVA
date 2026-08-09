@@ -6,9 +6,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Ayvalık Bank HA-1** — a hexagonal-architecture banking application in Java 25 / Spring Boot 3.4.
 
+## Cross-repository invariants
+
+This repo is one of six (hexagonal + layered × Java/.NET/Python) that must stay **functionally
+identical**. `AyvalikBankContractTests` is one black-box HTTP suite run against all six, and CI runs
+it on every push. Before changing any endpoint, status code, field name or JSON shape, check whether
+the change belongs in all six.
+
+- Wire format is **camelCase**; validation failures are **400** (not FastAPI's default 422).
+- Enums travel as **strings** (`"USD"`), never numbers.
+- Refactoring write-ups live in `Refactorings.md`; the Java hexagonal repo is the reference.
+
 ## Commands
 
 ```bash
+# Browsable API docs once the app is running: /swagger-ui.html
+# Shared contract suite (from AyvalikBankContractTests):
+#   BANK_BASE_URL=http://localhost:8080 pytest tests/
+
 # Start local PostgreSQL
 docker compose up -d
 
@@ -20,7 +35,21 @@ mvn test -Dtest=CustomerApplicationServiceTest
 
 # Run the application
 mvn spring-boot:run
+
+# Run without Docker (H2 in memory) — see Environment gotchas for why each flag is needed
+mvn spring-boot:run -Dspring-boot.run.useTestClasspath=true \
+  -Dspring-boot.run.arguments="--spring.datasource.url=jdbc:h2:mem:bank;MODE=PostgreSQL;NON_KEYWORDS=KEY,VALUE \
+  --spring.datasource.driver-class-name=org.h2.Driver --spring.jpa.hibernate.ddl-auto=create-drop \
+  --spring.sql.init.mode=never"
 ```
+
+## Environment gotchas
+
+- **Running without Docker:** H2 is a *test-scoped* dependency, so `spring-boot:run` needs
+  `-Dspring-boot.run.useTestClasspath=true` or startup fails with `Cannot load driver class:
+  org.h2.Driver`. `data.sql` is PostgreSQL-specific — use `--spring.sql.init.mode=never` and let
+  Hibernate create the schema; the admin is seeded in code.
+- **Docker Desktop** stops on its own; if compose fails with a socket error, `open -a Docker` and wait.
 
 ## Architecture
 

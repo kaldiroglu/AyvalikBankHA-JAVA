@@ -2,6 +2,8 @@
 
 A banking application built as a learning project to practice **Hexagonal Architecture** (Ports & Adapters). The codebase is intentionally kept small and focused so every layer of the pattern is clearly visible.
 
+For further enquiry please contact Akin Kaldiroglu at akin@kaldiroglu.dev
+
 ## Objective
 
 Demonstrate how to apply hexagonal architecture to a real domain — a simplified bank — using Java and Spring Boot. The domain layer contains zero framework imports; all Spring and JPA concerns are confined to adapters at the edges.
